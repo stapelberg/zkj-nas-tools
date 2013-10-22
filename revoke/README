@@ -1,0 +1,109 @@
+revoke
+------
+
+revoke is a tiny webapp that serves files, typically part of a cryptographic
+secret key, and will delete (= revoke) that file if prompted. The only
+information you need for revoking a file is its name. Reading access to files
+can be restricted based on the client’s IP address.
+
+An example use case for revoke is secret sharing between a NAS (Network
+Attached Storage) and a remote server. The goal is to avoid entering
+passphrases every time the NAS is booted, while avoiding that a thief (or the
+police, attacker, …) can physically steal the NAS and get access to all the
+data.
+
+In this example, a keyfile is generated that is split into two parts. One part
+is served by revoke, the other one resides on the NAS. In case the NAS gets
+stolen, you can easily revoke the key on your server by navigating to the
+revoke URL with your smartphone, or instructing a friend to do so. This renders
+the key stored on the NAS useless. Vice versa, if the server gets stolen, you
+can simply delete the key from the NAS.
+
+The fact that an attacker with knowledge of the system and of your internal
+network can revoke your key(s) and thus cause an inconvenience in your life is
+acceptable, given that alternatives make the entire system much more complex.
+Consider that such an attacker would need to know the filename, though, which
+you can make hard to guess. Since all traffic is SSL-encrypted between the NAS
+and the server, man-in-the-middle attacks are not a concern, even if the
+attacker is on the local network.
+
+With regards to access control, the situation is similar: an attacker would
+need to know the filename plus the IP address from which your NAS connects to
+the server. Granted, the IP address is easier to figure out, since it can be
+easily captured at any network path between the NAS and the server. The hope in
+such a situation is that you have time to revoke the key before an attacker can
+figure out the key name by inspecting the stolen NAS and manages to spoof the
+IP address.
+
+I hope this made it clear what the security ↔ convenience trade-off in such a
+setup is. It is up to you whether you think it’s a good one :).
+
+Installation
+------------
+
+These are notes I took when I set up “revoke” on my server:
+
+adduser --no-create-home --home /etc/revoke --disabled-login --gid 65534 revoke
+chown -R revoke.nogroup /etc/revoke
+find /etc/revoke -type d -exec chmod 0700 '{}' \;     
+find /etc/revoke -type f -exec chmod 0400 '{}' \;
+
+cd /etc/ssl/private
+openssl genrsa -des3 -passout pass:x -out revoke.zekjur.net.pass.key 2048
+openssl rsa -passin pass:x -in revoke.zekjur.net.pass.key -out revoke.zekjur.net.key
+rm revoke.zekjur.net.pass.key
+openssl req -new -key revoke.zekjur.net.key -out revoke.zekjur.net.csr
+openssl x509 -req -days $((10*365)) -in revoke.zekjur.net.csr -signkey revoke.zekjur.net.key -out ../certs/revoke.zekjur.net.crt
+cat revoke.zekjur.net.key ../certs/revoke.zekjur.net.crt > revoke.zekjur.net-combined.pem
+
+# revoke.zekjur.net (SSL)
+$SERVER["socket"] == "[2001:4d88:100e:4::9]:443" {
+        ssl.engine = "enable"
+        ssl.pemfile = "/etc/ssl/private/revoke.zekjur.net-combined.pem"
+        ssl.cipher-list = "RC4:AES128-SHA:AES:CAMELLIA128-SHA:!ADH:!aNULL:!DH:!EDH:!eNULL:!LOW:!SSLv2:!EXP:!NULL"
+}
+
+
+$HTTP["host"] == "revoke.zekjur.net" {
+        accesslog.filename = ""
+        server.errorlog = ""
+
+        proxy.server = ( "" => ( ( "host" => "127.0.0.1", "port" => 8093 ) ) )
+}
+
+wget --ca-directory=/dev/null --ca-certificate=revoke.zekjur.net.crt -S -O /dev/null https://revoke.zekjur.net/
+
+(echo -n '<shared part 1>' && wget --ca-directory=/dev/null --ca-certificate=/etc/ssl/certs/revoke.zekjur.net.crt -qO - https://revoke.zekjur.net/test) > /run/key
+cryptsetup luksAddKey /dev/sda2 /run/key
+
+cd /etc/revoke/<ip>
+dd if=/dev/random of=foo bs=32 count=1
+
+cat /etc/systemd/system/unlock.service
+[Unit]
+Description=unlock hard drive
+Wants=network.target
+After=net.target
+Before=samba.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Wait until the host is actually reachable. In practice, the output looks like this on my machine:
+# Jun 09 18:06:34 storage0 sh[213]: connect: Network is unreachable
+# Jun 09 18:06:35 storage0 sh[213]: PING revoke.zekjur.net(2001:4d88:100e:4::9) 56 data bytes
+# Jun 09 18:06:35 storage0 sh[213]: From fe80::6670:2ff:fe77:e26e icmp_seq=1 Destination unreachable: Beyond scope of source address
+# Jun 09 18:06:35 storage0 sh[213]: --- revoke.zekjur.net ping statistics ---
+# Jun 09 18:06:35 storage0 sh[213]: 1 packets transmitted, 0 received, +1 errors, 100% packet loss, time 0ms
+# Jun 09 18:06:37 storage0 sh[213]: PING revoke.zekjur.net(2001:4d88:100e:4::9) 56 data bytes
+# Jun 09 18:06:37 storage0 sh[213]: 64 bytes from 2001:4d88:100e:4::9: icmp_seq=1 ttl=51 time=49.6 ms
+# Jun 09 18:06:37 storage0 sh[213]: --- revoke.zekjur.net ping statistics ---
+# Jun 09 18:06:37 storage0 sh[213]: 1 packets transmitted, 1 received, 0% packet loss, time 0ms
+# Jun 09 18:06:37 storage0 sh[213]: rtt min/avg/max/mdev = 49.604/49.604/49.604/0.000 ms
+ExecStart=/bin/sh -c "c=0; while [ $c -lt 5 ]; do /bin/ping6 -n -c 1 revoke.zekjur.net && break; c=$((c+1)); sleep 1; done"
+ExecStart=/bin/sh -c "(echo -n '<shared key 1>' && wget --retry-connrefused --ca-directory=/dev/null --ca-certificate=/etc/ssl/certs/revoke.zekjur.net.crt -qO - https://revoke.zekjur.net/sda2) | /sbin/cryptsetup --key-file=- luksOpen /dev/sda2 sda2_crypt"
+ExecStart=/bin/mount /dev/mapper/sda2_crypt /srv
+
+[Install]
+WantedBy=multi-user.target
+

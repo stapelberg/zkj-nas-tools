@@ -1,0 +1,12 @@
+[Unit]
+Description=revoke server
+
+[Service]
+User=revoke
+Group=nogroup
+ExecStart=/usr/bin/revoke -listen_address=localhost:8093
+ReadOnlyDirectories=/
+ReadWriteDirectories=/etc/revoke
+
+[Install]
+WantedBy=multi-user.target
