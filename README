@@ -1,0 +1,17 @@
+Introduction
+------------
+This repository contains several programs that I use for my NAS (Network
+Attached Storage) at home.
+
+They are provided as FOSS in the hope that they are useful.
+
+Programs
+--------
+
+ revoke — webapp for easily revokable (secret) key sharing
+
+License
+-------
+
+Unless otherwise stated, all programs are published under the license found in
+the file LICENSE (BSD 3-clause).
