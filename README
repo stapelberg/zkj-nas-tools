@@ -10,6 +10,15 @@ Programs
 
  revoke — webapp for easily revokable (secret) key sharing
 
+Building
+--------
+
+Simply use:
+
+    go get github.com/stapelberg/zkj-nas-tools/revoke
+
+And you’ll have the binary in $GOPATH/bin/
+
 License
 -------
 
