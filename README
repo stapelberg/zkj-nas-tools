@@ -9,6 +9,7 @@ Programs
 --------
 
  revoke — webapp for easily revokable (secret) key sharing
+ dramaqueen — shuts down the NAS once nobody is using it anymore
 
 Building
 --------

@@ -1,0 +1,14 @@
+[Unit]
+Description=dramaqueen (shuts down the NAS if nobody uses it)
+
+[Service]
+# Wait 10 minutes before actually shutting down.
+ExecStart=/usr/bin/dramaqueen -idle_seconds=600
+# I have seen failures of net(8) due to too many open files, and net(8)
+# failures are treated as fatal. Restart dramaqueen until it is clear what
+# the actual problem is.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
