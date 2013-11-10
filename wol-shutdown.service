@@ -1,0 +1,20 @@
+[Unit]
+Description=Enable Wake on LAN on shutdown
+# Just for having the correct order when shutting down.
+After=qcontrold.service
+# Require eth0 to be present before trying to change WOL.
+# not supported in systemd-44
+#BindsTo=sys-subsystem-net-devices-eth0.device
+Requires=sys-devices-platform-mv643xx_eth_port.0-net-eth0.device
+After=sys-devices-platform-mv643xx_eth_port.0-net-eth0.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ethtool -s eth0 wol d
+ExecStart=/usr/sbin/qcontrol wakeonlan off
+ExecStop=/sbin/ethtool -s eth0 wol g
+ExecStop=/usr/sbin/qcontrol wakeonlan on
+
+[Install]
+WantedBy=multi-user.target
