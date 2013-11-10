@@ -1,0 +1,16 @@
+This is the marvell phy module (CONFIG_MARVELL_PHY), built for the Debian
+package linux-image-3.10-3-kirkwood. Copy it to
+/lib/modules/3.10-3-kirkwood/kernel/drivers/net/phy/, reboot, and WOL should
+work.
+
+See http://bugs.debian.org/723177 for the bug to get this missing module
+available in the Debian kernel.
+
+I built this module using:
+apt-get source linux-image-3.10-3-kirkwood
+cd linux-3.10.11
+sed -i 's/# \(CONFIG_MARVELL_PHY\) is not set/\1=m/' debian/config/armel/config.kirkwood
+sed -i 's/compiler: gcc-4.7/compiler: gcc-4.4/'  debian/config/defines
+fakeroot make -f debian/rules debian/control-real
+fakeroot make -f debian/rules.gen setup_armel_none_kirkwood
+fakeroot make -f debian/rules.gen binary-arch_armel_none_kirkwood binary-indep DEBIAN_KERNEL_JOBS=8
