@@ -1,0 +1,16 @@
+Dornröschen is all about waking up. In this case, dornröschen is a program that
+will wake up your sleeping machines and runs a backup. Also, it will
+synchronize your NASen afterwards.
+
+On each machine to back up, you need to configure SSH to allow key-based logins
+as root. For security reasons, the only command that the specific key should be
+allowed to run is /root/backup.pl, which is a wrapper around rsync with
+host-specific configuration. It could look like the backup.pl in this directory.
+
+Configure /root/.ssh/authorized_keys like this:
+command="/root/backup.pl",no-port-forwarding,no-X11-forwarding ssh-rsa …
+
+Note that only the /srv/data directory is synced, /srv/backups is not. This is
+because backups go to a different NAS each day, so a drive failure in the NAS
+reduces the redundancy from r=3 to r=2 for all files older than a day and from
+r=2 to r=1 for all files only contained in yesterday’s backup.

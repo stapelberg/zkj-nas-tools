@@ -161,7 +161,9 @@ func ipv4Payload(b []byte) []byte {
 func Ping(addr string, timeout time.Duration, result chan *time.Duration) {
 	conn, err := net.Dial("ip4:icmp", addr)
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
+		result <- nil
+		return
 	}
 	defer conn.Close()
 	start := time.Now()
