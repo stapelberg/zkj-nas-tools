@@ -24,7 +24,7 @@ var (
 		"midna/38:60:77:ab:d3:ea,x200/00:1f:16:1a:f5:b8",
 		"Comma-separated list of hosts to back up, each entry is host/mac-address")
 	storageHosts = flag.String("storage_hosts",
-		"10.250/00:08:9b:d0:31:ef,10.251/00:08:9b:d1:6f:39",
+		"10.0.0.250/00:08:9b:d0:31:ef,10.0.0.251/00:08:9b:d1:6f:39",
 		"Comma-separated list of NASen, each entry is host/mac-address")
 	backupPrivateKeyPath = flag.String("ssh_backup_private_key_path",
 		"/root/.ssh/id_rsa_backup",
