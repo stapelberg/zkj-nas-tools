@@ -144,6 +144,9 @@ func main() {
 	})
 
 	http.HandleFunc("/inhibit", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			return
+		}
 		key := r.FormValue("key")
 		statusLock.Lock()
 		inhibitors[key] = time.Now()
@@ -151,6 +154,9 @@ func main() {
 	})
 
 	http.HandleFunc("/release", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			return
+		}
 		key := r.FormValue("key")
 		statusLock.Lock()
 		delete(inhibitors, key)
