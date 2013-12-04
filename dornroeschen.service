@@ -1,0 +1,7 @@
+[Unit]
+Description=dornröschen (syncs NASen, backs up computers)
+
+[Service]
+ExecStart=/usr/bin/dornröschen \
+	-sync=true \
+	-backup=false
