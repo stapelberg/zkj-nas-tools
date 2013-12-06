@@ -90,7 +90,7 @@ func wakeUp(host, mac string) (bool, error) {
 	log.Printf("Sent magic packet to %02x:%02x:%02x:%02x:%02x:%02x\n",
 		macParts[0], macParts[1], macParts[2], macParts[3], macParts[4], macParts[5])
 
-	timeout := 20 * time.Second
+	timeout := 120 * time.Second
 	packetSent := time.Now()
 	for time.Since(packetSent) < timeout {
 		go ping.Ping(host, 1*time.Second, result)
