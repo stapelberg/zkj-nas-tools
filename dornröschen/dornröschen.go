@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/stapelberg/zkj-nas-tools/ping"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"strconv"
@@ -105,13 +106,24 @@ func wakeUp(host, mac string) (bool, error) {
 }
 
 func dramaqueenRequest(NAS, lock, method string) {
-	resp, err := http.Post("http://"+NAS+":4414/"+method+"?key="+lock, "text/plain", nil)
-	if err != nil {
-		log.Fatalf(`Could not acquire dramaqueen lock on %s: %v`, NAS, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		log.Fatalf(`dramaqueen request on %s resulted in HTTP %d`, NAS, resp.StatusCode)
+	retry := 0
+	for retry < 5 {
+		retry++
+		resp, err := http.Post("http://"+NAS+":4414/"+method+"?key="+lock, "text/plain", nil)
+		if err != nil {
+			if retry == 5 {
+				log.Fatalf(`Could not acquire dramaqueen lock on %s: %v`, NAS, err)
+			} else {
+				log.Printf(`Could not acquire dramaqueen lock on %s: %v`, NAS, err)
+				time.Sleep(time.Duration(math.Pow(2, float64(retry))) * time.Second)
+				continue
+			}
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			log.Fatalf(`dramaqueen request on %s resulted in HTTP %d`, NAS, resp.StatusCode)
+		}
+		break
 	}
 }
 
