@@ -85,7 +85,9 @@ func sshCommand(host, keypath, command string) (string, error) {
 	}
 	output, err := session.CombinedOutput(command)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf(`Could not execute SSH command "%s":
+		%s
+		%v`, command, output, err)
 	}
 	return string(output), nil
 }
