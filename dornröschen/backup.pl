@@ -16,6 +16,7 @@ if (my ($destination) = ($ENV{SSH_ORIGINAL_COMMAND} =~ /^([a-z0-9.]+)$/)) {
         "/usr/bin/rsync",
         "-aXx",
         "--numeric-ids",
+        "--relative",
         "/",
         "/boot",
         "rsync://$destination/midna/$today",
