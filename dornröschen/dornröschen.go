@@ -152,6 +152,7 @@ func backup(NASen []string) {
 		// Prevent dramaqueen on the destination NAS from shutting it down.
 		lockname := "backup-" + sourceHost
 		lockDramaqueen(destHost, lockname)
+		defer releaseDramaqueenLock(destHost, lockname)
 
 		woken, err := wakeUp(sourceHost, sourceMAC)
 		if err != nil {
@@ -168,8 +169,6 @@ func backup(NASen []string) {
 			continue
 		}
 		log.Printf("backup command yielded %s\n", output)
-
-		releaseDramaqueenLock(destHost, lockname)
 
 		// Suspend the machine to RAM, but only if we have woken it up.
 		if !woken {
