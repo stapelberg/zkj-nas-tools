@@ -10,6 +10,7 @@ Programs
 
  revoke — webapp for easily revokable (secret) key sharing
  dramaqueen — shuts down the NAS once nobody is using it anymore
+ autowake — wakes up NAS once traffic is sent to it
  dornröschen — wakes up machines/NASen to backup/sync
 
 Building
