@@ -30,6 +30,10 @@ var (
 		60,
 		"Timeout for a wakeup to take until it is considered failed")
 
+	wolCommand = flag.String("wol_command",
+		"wakeonlan",
+		"Command to call (with target MAC address as first argument) to wake up the computer")
+
 	state = waiting
 )
 
@@ -43,7 +47,9 @@ func pingRemote() {
 	}
 
 	log.Printf("target unresponsive, sending magic packet to %s…\n", *remoteMac)
-	exec.Command("wakeonlan", *remoteMac).Run()
+	if err := exec.Command(*wolCommand, *remoteMac).Run(); err != nil {
+		log.Fatal(err)
+	}
 	for second := 0; second < *wakeTimeout; second++ {
 		go ping.Ping(*remoteIp, 1*time.Second, result)
 		if <-result != nil {
