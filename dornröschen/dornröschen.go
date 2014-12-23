@@ -172,7 +172,7 @@ func backup(NASen []string) {
 			log.Printf("Backup of %s failed: %v\n", sourceHost, err)
 			continue
 		}
-		log.Printf("backup command yielded %s\n", output)
+		log.Printf("backup command on %s yielded %s\n", sourceHost, output)
 
 		// Suspend the machine to RAM, but only if we have woken it up.
 		if !woken {
