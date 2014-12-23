@@ -154,10 +154,14 @@ func backup(NASen []string) {
 		lockDramaqueen(destHost, lockname)
 		defer releaseDramaqueenLock(destHost, lockname)
 
-		woken, err := wakeUp(sourceHost, sourceMAC)
-		if err != nil {
-			log.Printf("Backup of %s failed: %v\n", sourceHost, err)
-			continue
+		woken := false
+		if sourceMAC != "" {
+			var err error
+			woken, err = wakeUp(sourceHost, sourceMAC)
+			if err != nil {
+				log.Printf("Backup of %s failed: %v\n", sourceHost, err)
+				continue
+			}
 		}
 
 		// The command is just destHost, because for the SSH key this program
