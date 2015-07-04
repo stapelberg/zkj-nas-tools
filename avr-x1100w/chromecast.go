@@ -174,9 +174,6 @@ func pollChromecast(addr net.IP, port int) error {
 					return fmt.Errorf("Error unmarshaling RECEIVER_STATUS JSON: %v", err)
 				}
 
-				// Connect to and request status of every currently running
-				// application that can play media. If there are none,
-				// chromecast is not playing currently.
 				log.Printf("status = %+v\n", status)
 				mediaFound := false
 				for _, app := range status.Status.Applications {
@@ -191,38 +188,6 @@ func pollChromecast(addr net.IP, port int) error {
 						stateChanged.Broadcast()
 						break
 					}
-					//for _, namespace := range app.Namespaces {
-					//	if namespace.Name == "urn:x-cast:mdx-netflix-com:service:target:2" || namespace.Name == "urn:x-cast:com.google.cast.media" {
-					//		// Since we cannot look into what netflix is doing, assume it is playing.
-					//		mediaFound = true
-
-					//		stateMu.Lock()
-					//		state.chromecastPlaying = true
-					//		stateMu.Unlock()
-					//		stateChanged.Broadcast()
-					//	}
-					//	//if namespace.Name == "urn:x-cast:com.google.cast.media" {
-					//	//	mediaFound = true
-
-					//	//	requestId++
-					//	//	if err := send(conn, payloadHeaders{Type: "CONNECT", RequestId: &requestId}, &cast_channel.CastMessage{
-					//	//		SourceId:      proto.String("sender-0"),
-					//	//		DestinationId: proto.String(app.TransportId),
-					//	//		Namespace:     proto.String("urn:x-cast:com.google.cast.tp.connection"),
-					//	//	}); err != nil {
-					//	//		return err
-					//	//	}
-
-					//	//	requestId++
-					//	//	if err := send(conn, payloadHeaders{Type: "GET_STATUS", RequestId: &requestId}, &cast_channel.CastMessage{
-					//	//		SourceId:      proto.String("sender-0"),
-					//	//		DestinationId: proto.String(app.TransportId),
-					//	//		Namespace:     proto.String(namespace.Name),
-					//	//	}); err != nil {
-					//	//		return err
-					//	//	}
-					//	//}
-					//}
 				}
 				if !mediaFound {
 					stateMu.Lock()
@@ -230,32 +195,6 @@ func pollChromecast(addr net.IP, port int) error {
 					stateMu.Unlock()
 					stateChanged.Broadcast()
 				}
-				break
-
-			case "urn:x-cast:com.google.cast.media":
-				type mediaStatus struct {
-					PlayerState string `json:"playerState"`
-				}
-				type mediaStatusPayload struct {
-					Status []mediaStatus `json:"status"`
-				}
-
-				var status mediaStatusPayload
-				if err := json.Unmarshal([]byte(message.GetPayloadUtf8()), &status); err != nil {
-					return fmt.Errorf("Error unmarshaling RECEIVER_STATUS JSON: %v", err)
-				}
-
-				playing := false
-				for _, s := range status.Status {
-					if s.PlayerState == "BUFFERING" || s.PlayerState == "PLAYING" {
-						playing = true
-					}
-				}
-
-				stateMu.Lock()
-				state.chromecastPlaying = playing
-				stateMu.Unlock()
-				stateChanged.Broadcast()
 				break
 
 			default:
