@@ -1,0 +1,8 @@
+[Unit]
+Description=runstatus
+
+[Service]
+ExecStart=/home/michael/gocode/bin/runstatus -listen_address=midna.localhost:4000 -program=i3lock
+
+[Install]
+WantedBy=multi-user.target
