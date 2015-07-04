@@ -31,7 +31,7 @@ Based on these inputs, the following outputs are controlled:
 1. AVR input source (PC, Chromecast or ZBOX).
 1. Video projector power state (on or standby).
 
-For the logic that determines the outputs, see stateMachine() in avr.go.
+For the logic that determines the outputs, see stateMachine() in main.go.
 
 ## Cross-compilation
 
