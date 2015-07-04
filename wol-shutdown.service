@@ -12,9 +12,9 @@ After=sys-devices-platform-mv643xx_eth_port.0-net-eth0.device
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/sbin/ethtool -s eth0 wol d
-ExecStart=/usr/sbin/qcontrol wakeonlan off
+ExecStart=/usr/sbin/qcontrol wol off
 ExecStop=/sbin/ethtool -s eth0 wol g
-ExecStop=/usr/sbin/qcontrol wakeonlan on
+ExecStop=/usr/sbin/qcontrol wol on
 
 [Install]
 WantedBy=multi-user.target
