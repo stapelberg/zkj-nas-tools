@@ -1,15 +1,14 @@
 package main
 
 import (
-	"code.google.com/p/go.crypto/ssh"
 	"crypto"
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+
+	"golang.org/x/crypto/ssh"
 )
 
 type keychain struct {
@@ -32,27 +31,17 @@ func (k *keychain) Sign(i int, rand io.Reader, data []byte) (sig []byte, err err
 }
 
 // Reads an OpenSSH key and provides it as a ssh.ClientAuth.
-func openSshClientAuth(path string) (ssh.ClientAuth, error) {
+func openSshClientAuth(path string) (ssh.AuthMethod, error) {
 	privateKey, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	block, _ := pem.Decode(privateKey)
-	if block == nil {
-		return nil, fmt.Errorf(`No key data found in PEM file "%s"`, path)
-	}
-
-	rsakey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-
-	clientKey := &keychain{rsakey}
-	return ssh.ClientAuthKeyring(clientKey), nil
+	signer, err := ssh.ParsePrivateKey(privateKey)
+	return ssh.PublicKeys(signer), err
 }
 
-func newSshConnection(host, keypath string) (*ssh.ClientConn, error) {
+func newSshConnection(host, keypath string) (*ssh.Client, error) {
 	clientauth, err := openSshClientAuth(keypath)
 	if err != nil {
 		log.Fatal(err)
@@ -60,14 +49,14 @@ func newSshConnection(host, keypath string) (*ssh.ClientConn, error) {
 
 	clientConfig := &ssh.ClientConfig{
 		User: "root",
-		Auth: []ssh.ClientAuth{clientauth},
+		Auth: []ssh.AuthMethod{clientauth},
 	}
 
-	clientconn, err := ssh.Dial("tcp", host+":22", clientConfig)
+	client, err := ssh.Dial("tcp", host+":22", clientConfig)
 	if err != nil {
 		return nil, err
 	}
-	return clientconn, nil
+	return client, nil
 }
 
 func sshCommand(host, keypath, command string) (string, error) {
