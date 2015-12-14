@@ -4,7 +4,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/stapelberg/zkj-nas-tools/ping"
 	"log"
 	"math"
 	"net"
@@ -12,6 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stapelberg/zkj-nas-tools/ping"
 )
 
 var (
@@ -36,6 +38,9 @@ var (
 	syncPrivateKeyPath = flag.String("ssh_sync_private_key_path",
 		"/root/.ssh/id_rsa_sync",
 		"Path to the SSH private key file to authenticate with at -storage_hosts for syncing")
+	pushGateway = flag.String("prometheus_push_gateway",
+		"http://pushgateway.zekjur.net:9091/",
+		"URL of a https://github.com/prometheus/pushgateway instance")
 )
 
 func splitHostMAC(hostmac string) (host, mac string) {
@@ -234,5 +239,16 @@ func main() {
 
 	if *runSync {
 		sync(storageList)
+	}
+
+	lastSuccess := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "last_success",
+		Help: "Timestamp of the last success",
+	})
+	prometheus.MustRegister(lastSuccess)
+	lastSuccess.Set(float64(time.Now().Unix()))
+
+	if err := prometheus.Push("dornroeschen", "dornroeschen", *pushGateway); err != nil {
+		log.Fatal(err)
 	}
 }
