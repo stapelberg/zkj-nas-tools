@@ -15,7 +15,10 @@ func pollVideoProjector() {
 	go func() {
 		for {
 			// Query power state.
-			toVideoProjector <- "~00124 1\r"
+			select {
+			case toVideoProjector <- "~00124 1\r":
+			default:
+			}
 			time.Sleep(5 * time.Second)
 		}
 	}()
@@ -59,7 +62,7 @@ func pollVideoProjector() {
 
 			// The video projector sends F (or empty lines)
 			trimmed := strings.TrimSpace(line)
-			log.Printf("line from video projector: %q, bytes = %v\n", trimmed, []byte(line))
+			//log.Printf("line from video projector: %q, bytes = %v\n", trimmed, []byte(line))
 			if trimmed == "F" || trimmed == "\x00F" || trimmed == "" {
 				continue
 			}
