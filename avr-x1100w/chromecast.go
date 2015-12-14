@@ -9,11 +9,19 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/mdns"
 	"github.com/stapelberg/zkj-nas-tools/avr-x1100w/cast_channel"
+)
+
+type chromecastDevice int
+
+const (
+	chromecast = iota
+	chromecastAudio
 )
 
 const castService = "_googlecast._tcp"
@@ -72,11 +80,11 @@ func send(conn net.Conn, headers payloadHeaders, msg *cast_channel.CastMessage) 
 	return nil
 }
 
-func pollChromecast(addr net.IP, port int) error {
+func pollChromecast(deviceType chromecastDevice, done chan bool, hostport string) error {
 	var requestId int
 
 	// TODO: use setreadtimeout?
-	conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", addr, port), &tls.Config{
+	conn, err := tls.Dial("tcp", hostport, &tls.Config{
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
@@ -120,6 +128,8 @@ func pollChromecast(addr net.IP, port int) error {
 
 	for {
 		select {
+		case <-done:
+			return nil
 		case err := <-readErrChan:
 			return err
 		case <-time.After(5 * time.Second):
@@ -148,7 +158,11 @@ func pollChromecast(addr net.IP, port int) error {
 					}
 				} else if headers.Type == "PONG" {
 					stateMu.Lock()
-					lastContact["chromecast"] = time.Now()
+					if deviceType == chromecast {
+						lastContact["chromecast"] = time.Now()
+					} else if deviceType == chromecastAudio {
+						lastContact["chromecastAudio"] = time.Now()
+					}
 					stateMu.Unlock()
 				}
 				break
@@ -173,6 +187,7 @@ func pollChromecast(addr net.IP, port int) error {
 				if err := json.Unmarshal([]byte(message.GetPayloadUtf8()), &status); err != nil {
 					return fmt.Errorf("Error unmarshaling RECEIVER_STATUS JSON: %v", err)
 				}
+				log.Printf("status raw: %+v\n", message.GetPayloadUtf8())
 
 				log.Printf("status = %+v\n", status)
 				mediaFound := false
@@ -183,7 +198,11 @@ func pollChromecast(addr net.IP, port int) error {
 						mediaFound = true
 
 						stateMu.Lock()
-						state.chromecastPlaying = true
+						if deviceType == chromecast {
+							state.chromecastPlaying = true
+						} else if deviceType == chromecastAudio {
+							state.chromecastAudioPlaying = true
+						}
 						stateMu.Unlock()
 						stateChanged.Broadcast()
 						break
@@ -191,7 +210,11 @@ func pollChromecast(addr net.IP, port int) error {
 				}
 				if !mediaFound {
 					stateMu.Lock()
-					state.chromecastPlaying = false
+					if deviceType == chromecast {
+						state.chromecastPlaying = false
+					} else if deviceType == chromecastAudio {
+						state.chromecastAudioPlaying = false
+					}
 					stateMu.Unlock()
 					stateChanged.Broadcast()
 				}
@@ -204,32 +227,69 @@ func pollChromecast(addr net.IP, port int) error {
 	}
 }
 
+func mdnsLookup(entriesCh chan *mdns.ServiceEntry) {
+	params := mdns.DefaultParams(castService)
+	params.Entries = entriesCh
+	params.WantUnicastResponse = true
+	mdns.Query(params)
+}
+
 // discoverAndPollChromecasts runs an infinite loop, discovering and polling
 // chromecast devices in the local network for whether they are currently
 // playing. The first discovered device is used.
 func discoverAndPollChromecasts() {
-	entriesCh := make(chan *mdns.ServiceEntry)
-	go mdns.Lookup(castService, entriesCh)
+	var chromecastsMu sync.RWMutex
+	chromecasts := make(map[string]chan bool)
+	entriesCh := make(chan *mdns.ServiceEntry, 5)
+
+	go mdnsLookup(entriesCh)
 	for {
 		select {
 		case entry := <-entriesCh:
 			if !strings.Contains(entry.Name, castService) {
-				return
+				continue
 			}
 
-			fmt.Printf("Got new chromecast: %v\n", entry)
-			err := pollChromecast(entry.Addr, entry.Port)
-			log.Printf("Error polling chromecast %s:%d: %v\n", entry.Addr, entry.Port, err)
+			var deviceType chromecastDevice
+			for _, field := range entry.InfoFields {
+				if !strings.HasPrefix(field, "md=") {
+					continue
+				}
+				if field == "md=Chromecast" {
+					deviceType = chromecast
+				} else if field == "md=Chromecast Audio" {
+					deviceType = chromecastAudio
+				}
+			}
+			hostport := fmt.Sprintf("%s:%d", entry.Addr, entry.Port)
+			chromecastsMu.RLock()
+			_, exists := chromecasts[hostport]
+			chromecastsMu.RUnlock()
+			if exists {
+				continue
+			}
+			fmt.Printf("Found new chromecast at %q: %+v\n", hostport, entry)
+			done := make(chan bool)
+			chromecastsMu.Lock()
+			chromecasts[hostport] = done
+			chromecastsMu.Unlock()
+			go func(deviceType chromecastDevice, done chan bool, hostport string) {
+				err := pollChromecast(deviceType, done, hostport)
+				if err != nil {
+					log.Printf("Error polling chromecast %s:%d: %v\n", entry.Addr, entry.Port, err)
+				}
+				chromecastsMu.Lock()
+				delete(chromecasts, hostport)
+				chromecastsMu.Unlock()
+			}(deviceType, done, hostport)
 			stateMu.Lock()
 			state.chromecastPlaying = false
 			stateMu.Unlock()
 			stateChanged.Broadcast()
-			break
 
 		case <-time.After(10 * time.Second):
 			log.Printf("Starting new MDNS lookup\n")
-			go mdns.Lookup(castService, entriesCh)
-			break
+			go mdnsLookup(entriesCh)
 		}
 	}
 }

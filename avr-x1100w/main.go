@@ -27,13 +27,14 @@ var (
 )
 
 type State struct {
-	chromecastPlaying     bool
-	zboxPowered           bool
-	midnaUnlocked         bool
-	videoProjectorPowered bool
-	avrPowered            bool
-	avrSource             string
-	timestamp             time.Time
+	chromecastPlaying      bool
+	chromecastAudioPlaying bool
+	zboxPowered            bool
+	midnaUnlocked          bool
+	videoProjectorPowered  bool
+	avrPowered             bool
+	avrSource              string
+	timestamp              time.Time
 }
 
 var (
@@ -52,13 +53,16 @@ var (
 func stateMachine(current State) State {
 	var next State
 
-	next.avrPowered = current.chromecastPlaying || current.zboxPowered || current.midnaUnlocked
+	next.avrPowered = current.chromecastPlaying || current.chromecastAudioPlaying || current.zboxPowered || current.midnaUnlocked
 	next.avrSource = "MPLAY"
 	if current.zboxPowered {
 		next.avrSource = "BD"
 	}
 	if current.chromecastPlaying {
 		next.avrSource = "GAME"
+	}
+	if current.chromecastAudioPlaying {
+		next.avrSource = "AUX1"
 	}
 	// TODO: exclude google play music on chromecast
 	next.videoProjectorPowered = current.chromecastPlaying || current.zboxPowered
