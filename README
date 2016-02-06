@@ -15,6 +15,7 @@ Programs
  avr-x1100w — orchestrates A/V receiver and video projector
  runstatus — exposes via HTTP whether a process is running
  homematic2prometheus — pushes HomeMatic data to Prometheus
+ homematic-watchdog — shell script to reboot the HomeMatic CCU2
 
 Building
 --------
