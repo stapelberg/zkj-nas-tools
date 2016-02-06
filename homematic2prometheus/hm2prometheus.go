@@ -62,7 +62,7 @@ func startXMLReply(w http.ResponseWriter) error {
 	return err
 }
 
-func handleListMethods(w http.ResponseWriter, r *http.Request, params []value) {
+func handleListMethods(w http.ResponseWriter, r *http.Request, params []value) bool {
 	// NB: The CCU2 doesn’t care at all about what we reply, as long as we
 	// reply. I.e., the CCU2 will call methods which we do not list here.
 	startXMLReply(w)
@@ -77,17 +77,10 @@ func handleListMethods(w http.ResponseWriter, r *http.Request, params []value) {
 			{String: "newDevices"},
 		},
 	}))
+	return true
 }
 
-func handleListDevices(w http.ResponseWriter, r *http.Request, params []value) {
-	startXMLReply(w)
-	xml.NewEncoder(w).Encode(&(struct {
-		XMLName xml.Name `xml:"methodResponse"`
-		Methods []value  `xml:"params>param>value>array>data>value"`
-	}{}))
-}
-
-func handleMultiCall(w http.ResponseWriter, r *http.Request, params []value) {
+func handleMultiCall(w http.ResponseWriter, r *http.Request, params []value) bool {
 	if got, want := len(params), 1; got != want {
 		log.Fatalf("system.multicall has wrong number of parameters: got %d, want %d", got, want)
 	}
@@ -112,9 +105,10 @@ func handleMultiCall(w http.ResponseWriter, r *http.Request, params []value) {
 		XMLName xml.Name `xml:"methodResponse"`
 		Methods []value  `xml:"params>param>value>array>data>value"`
 	}{}))
+	return true
 }
 
-func handleEvent(w http.ResponseWriter, r *http.Request, params []value) {
+func handleEvent(w http.ResponseWriter, r *http.Request, params []value) bool {
 	if got, want := len(params), 4; got != want {
 		log.Fatalf("Event had the wrong number of parameters: got %d, want %d", got, want)
 	}
@@ -140,7 +134,7 @@ func handleEvent(w http.ResponseWriter, r *http.Request, params []value) {
 	}
 	log.Printf("%q, %q, %f\n", address, param, value)
 	if !paramWhitelist[param] {
-		return
+		return false
 	}
 	g, ok := gaugeDefs[param]
 	if !ok {
@@ -155,17 +149,24 @@ func handleEvent(w http.ResponseWriter, r *http.Request, params []value) {
 	}
 	g.With(prometheus.Labels{"address": address}).Set(value)
 	lastEvent = time.Now()
+	return false
 }
 
 func dispatch(w http.ResponseWriter, r *http.Request, methodName string, params []value) {
+	var handled bool
 	if methodName == "system.listMethods" {
-		handleListMethods(w, r, params)
-	} else if methodName == "listDevices" {
-		handleListDevices(w, r, params)
+		handled = handleListMethods(w, r, params)
 	} else if methodName == "system.multicall" {
-		handleMultiCall(w, r, params)
+		handled = handleMultiCall(w, r, params)
 	} else if methodName == "event" {
-		handleEvent(w, r, params)
+		handled = handleEvent(w, r, params)
+	}
+	if !handled {
+		startXMLReply(w)
+		xml.NewEncoder(w).Encode(&(struct {
+			XMLName xml.Name `xml:"methodResponse"`
+			Methods []value  `xml:"params>param>value>array>data>value"`
+		}{}))
 	}
 }
 
