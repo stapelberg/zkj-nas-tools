@@ -14,6 +14,7 @@ Programs
  dornröschen — wakes up machines/NASen to backup/sync
  avr-x1100w — orchestrates A/V receiver and video projector
  runstatus — exposes via HTTP whether a process is running
+ homematic2prometheus — pushes HomeMatic data to Prometheus
 
 Building
 --------
