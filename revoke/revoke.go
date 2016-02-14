@@ -15,6 +15,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"log"
 	"net"
@@ -32,6 +33,13 @@ var (
 		"host:port on which to listen for HTTP requests")
 	acceptForwarded = flag.Bool("accept_forwarded", false,
 		"Accept the HTTP X-Forwarded-For header. Only enable when running behind a HTTP reverse proxy")
+	tlsCertPath = flag.String("tls_cert_path",
+		"",
+		"Path to a .pem file containing the TLS certificate.")
+	tlsKeyPath = flag.String("tls_key_path",
+		"",
+		"Path to a .pem file containing the TLS private key.")
+
 	fileNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 )
 
@@ -116,5 +124,23 @@ func main() {
 	http.HandleFunc("/", accessHandler)
 	http.HandleFunc("/_revoke/", revokeHandler)
 
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	listener, err := net.Listen("tcp", *listenAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if *tlsCertPath != "" && *tlsKeyPath != "" {
+		tlsConfig := &tls.Config{
+			NextProtos:   []string{"http/1.1"},
+			Certificates: make([]tls.Certificate, 1),
+		}
+
+		tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(*tlsCertPath, *tlsKeyPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		listener = tls.NewListener(listener, tlsConfig)
+	}
+	srv := http.Server{Addr: *listenAddress}
+	log.Fatal(srv.Serve(listener))
 }
