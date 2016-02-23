@@ -146,7 +146,7 @@ func main() {
 		if state.videoProjectorPowered != next.videoProjectorPowered {
 			if next.videoProjectorPowered {
 				log.Printf("Changing video projector power from %q to %q\n", state.videoProjectorPowered, next.videoProjectorPowered)
-				toVideoProjector <- "~0000 1\r"
+				turnOnVideoProjector()
 			} else {
 				alwaysOff := true
 				for _, s := range stateHistory {
@@ -160,7 +160,7 @@ func main() {
 				}
 				if alwaysOff {
 					log.Printf("Turning video projector off.\n")
-					toVideoProjector <- "~0000 0\r"
+					turnOffVideoProjector()
 				} else {
 					log.Printf("Not turning video projector off yet (hysteresis).\n")
 				}
