@@ -35,15 +35,5 @@ For the logic that determines the outputs, see stateMachine() in main.go.
 
 ## Cross-compilation
 
-In order to cross-compile this code to run on a Raspberry Pi, use the following
-commands on a Debian host system:
-
-```bash
-sudo dpkg --add-architecture armel
-sudo apt-get update
-sudo apt-get install golang-go-linux-arm gcc-arm-linux-gnueabi \
-  gcc-4.9-arm-linux-gnueabi libc6-dev:armel linux-libc-dev:armel
-CC=arm-linux-gnueabi-gcc CGO_ENABLED=1 GOARCH=arm GOARM=5 go build
-```
-
-(The instructions are somewhat elaborate because go-rs232 needs cgo.)
+In order to cross-compile this code to run on a Raspberry Pi, use `GOARCH=arm
+GOARM=5 go build`.

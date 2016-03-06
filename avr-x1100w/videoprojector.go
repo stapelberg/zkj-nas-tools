@@ -3,24 +3,29 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
-	"github.com/dustin/go-rs232"
+	"github.com/stapelberg/zkj-nas-tools/serial"
 )
 
 var toVideoProjector = make(chan string)
 
 func sendSerialCommand(command []byte) error {
-	serial, err := rs232.OpenPort(*videoProjectorSerialPath, 9600, rs232.S_8N1)
+	f, err := os.OpenFile(*videoProjectorSerialPath, os.O_RDWR, 0644)
 	if err != nil {
-		return fmt.Errorf("Could not open %q: %v\n", *videoProjectorSerialPath, err)
+		return fmt.Errorf("Could not open %q: %v", *videoProjectorSerialPath, err)
 	}
 
-	if _, err := serial.Write(command); err != nil {
-		return fmt.Errorf("Error writing to video projector: %v\n", err)
+	if err := serial.Configure(f, 9600); err != nil {
+		return fmt.Errorf("Could not configure %q to 9600 8N1: %v", *videoProjectorSerialPath, err)
 	}
 
-	return serial.Close()
+	if _, err := f.Write(command); err != nil {
+		return fmt.Errorf("Error writing to video projector: %v", err)
+	}
+
+	return f.Close()
 }
 
 func turnOnVideoProjector() {
