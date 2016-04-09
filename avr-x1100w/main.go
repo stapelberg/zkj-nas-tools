@@ -24,6 +24,20 @@ var (
 	midnaURL = flag.String("midna_url",
 		"http://midna:4000/",
 		"URL on which runstatus.go is accessible")
+
+	subwooferLevel = map[string]int{
+		"MPLAY": 50, // PC
+		"BD":    38, // steambox
+		"GAME":  38, // chromecast
+		"AUX1":  50, // chromecast audio
+	}
+
+	volume = map[string]int{
+		"MPLAY": 60, // PC
+		"BD":    45, // steambox
+		"GAME":  60, // chromecast
+		"AUX1":  60, // chromecast audio
+	}
 )
 
 type State struct {

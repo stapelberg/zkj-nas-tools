@@ -24,6 +24,17 @@ func talkWithAvr() {
 			} else if strings.HasPrefix(r, "SI") {
 				// e.g. SIGAME
 				state.avrSource = r[len("SI"):]
+
+				subwooferLevel, ok := subwooferLevel[state.avrSource]
+				if !ok {
+					subwooferLevel = 38 // -12 dB, i.e. take out all bass
+				}
+				volume, ok := volume[state.avrSource]
+				if !ok {
+					volume = 60
+				}
+				toAvr <- fmt.Sprintf("MV%d\r", volume)
+				toAvr <- fmt.Sprintf("PSSWL %d\r", subwooferLevel)
 			}
 			lastContact["avr"] = time.Now()
 			stateMu.Unlock()
@@ -44,6 +55,7 @@ func talkWithAvr() {
 					log.Printf("Error writing to AVR: %v\n", err)
 					return
 				}
+				time.Sleep(1 * time.Second)
 			}
 		}()
 		fmt.Fprintf(conn, "PW?\r")
