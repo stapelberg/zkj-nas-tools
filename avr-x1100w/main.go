@@ -27,14 +27,14 @@ var (
 
 	subwooferLevel = map[string]int{
 		"MPLAY": 50, // PC
-		"BD":    38, // steambox
+		"BD":    38, // beast
 		"GAME":  38, // chromecast
 		"AUX1":  50, // chromecast audio
 	}
 
 	volume = map[string]int{
 		"MPLAY": 60, // PC
-		"BD":    45, // steambox
+		"BD":    60, // beast
 		"GAME":  60, // chromecast
 		"AUX1":  60, // chromecast audio
 	}
@@ -43,7 +43,7 @@ var (
 type State struct {
 	chromecastPlaying      bool
 	chromecastAudioPlaying bool
-	zboxPowered            bool
+	beastPowered           bool
 	midnaUnlocked          bool
 	videoProjectorPowered  bool
 	avrPowered             bool
@@ -67,9 +67,9 @@ var (
 func stateMachine(current State) State {
 	var next State
 
-	next.avrPowered = current.chromecastPlaying || current.chromecastAudioPlaying || current.zboxPowered || current.midnaUnlocked
+	next.avrPowered = current.chromecastPlaying || current.chromecastAudioPlaying || current.beastPowered || current.midnaUnlocked
 	next.avrSource = "MPLAY"
-	if current.zboxPowered {
+	if current.beastPowered {
 		next.avrSource = "BD"
 	}
 	if current.chromecastPlaying {
@@ -79,7 +79,7 @@ func stateMachine(current State) State {
 		next.avrSource = "AUX1"
 	}
 	// TODO: exclude google play music on chromecast
-	next.videoProjectorPowered = current.chromecastPlaying || current.zboxPowered
+	next.videoProjectorPowered = current.chromecastPlaying
 	return next
 }
 
@@ -114,7 +114,7 @@ func main() {
 	go srv.Serve(ln)
 
 	go discoverAndPollChromecasts()
-	go pingZbox()
+	go pingBeast()
 	go talkWithAvr()
 	go pollMidna()
 	go pollVideoProjector()

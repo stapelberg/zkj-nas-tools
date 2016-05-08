@@ -6,16 +6,16 @@ import (
 	"github.com/stapelberg/zkj-nas-tools/ping"
 )
 
-func pingZbox() {
+func pingBeast() {
 	for {
 		result := make(chan *time.Duration)
-		go ping.Ping("openelec", 1*time.Second, result)
+		go ping.Ping("beast", 1*time.Second, result)
 		latency := <-result
 
 		stateMu.Lock()
-		state.zboxPowered = latency != nil
-		if state.zboxPowered {
-			lastContact["zbox"] = time.Now()
+		state.beastPowered = latency != nil
+		if state.beastPowered {
+			lastContact["beast"] = time.Now()
 		}
 		stateMu.Unlock()
 		stateChanged.Broadcast()

@@ -19,16 +19,13 @@ The program takes the following inputs into account:
 1. Which app is running on the
    [Chromecast](http://www.google.com/chrome/devices/chromecast/) (e.g.
    Netflix, YouTube).
-1. Whether my [Zotac
-   ZBOX](http://www.zotac.com/products/mini-pcs/zbox/nvidia/product/nvidia/detail/zbox-id82.html)
-   is powered on, implying that one wants to use the
-   [OpenELEC](http://openelec.tv/) installation that it runs.
-1. Whether midna (my workstation) is unlocked.
+1. Whether my gaming computer (“beast”) is powered on.
+1. Whether my workstation (“midna”) is unlocked.
 
 Based on these inputs, the following outputs are controlled:
 
 1. AVR power state (on or standby).
-1. AVR input source (PC, Chromecast or ZBOX).
+1. AVR input source (midna, Chromecast or beast).
 1. Video projector power state (on or standby).
 
 For the logic that determines the outputs, see stateMachine() in main.go.
