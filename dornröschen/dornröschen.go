@@ -110,14 +110,14 @@ func wakeUp(host, mac string) (bool, error) {
 	return true, fmt.Errorf("Host %s not responding to pings within %v after sending magic packet", host, timeout)
 }
 
-func dramaqueenRequest(NAS, lock, method string) {
+func dramaqueenRequest(NAS, lock, method string) error {
 	retry := 0
 	for retry < 5 {
 		retry++
 		resp, err := http.Post("http://"+NAS+":4414/"+method+"?key="+lock, "text/plain", nil)
 		if err != nil {
 			if retry == 5 {
-				log.Fatalf(`Could not acquire dramaqueen lock on %s: %v`, NAS, err)
+				return fmt.Errorf(`Could not acquire dramaqueen lock on %s: %v`, NAS, err)
 			} else {
 				log.Printf(`Could not acquire dramaqueen lock on %s: %v`, NAS, err)
 				time.Sleep(time.Duration(math.Pow(2, float64(retry))) * time.Second)
@@ -126,19 +126,20 @@ func dramaqueenRequest(NAS, lock, method string) {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
-			log.Fatalf(`dramaqueen request on %s resulted in HTTP %d`, NAS, resp.StatusCode)
+			return fmt.Errorf(`dramaqueen request on %s resulted in HTTP %d`, NAS, resp.StatusCode)
 		}
 		break
 	}
+	return nil
 }
 
-func lockDramaqueen(NAS, lock string) {
+func lockDramaqueen(NAS, lock string) error {
 	// TODO: dramaqueen should return an error if the lock already exists so that overruns will fail.
-	dramaqueenRequest(NAS, lock, "inhibit")
+	return dramaqueenRequest(NAS, lock, "inhibit")
 }
 
-func releaseDramaqueenLock(NAS, lock string) {
-	dramaqueenRequest(NAS, lock, "release")
+func releaseDramaqueenLock(NAS, lock string) error {
+	return dramaqueenRequest(NAS, lock, "release")
 }
 
 func backup(NASen []string) {
@@ -154,10 +155,14 @@ func backup(NASen []string) {
 	for _, source := range strings.Split(*backupHosts, ",") {
 		sourceHost, sourceMAC := splitHostMAC(source)
 
-		// Prevent dramaqueen on the destination NAS from shutting it down.
+		// Prevent dramaqueen on the destination NAS from shutting it down. If
+		// the dramaqueen lock cannot be acquired, just continue and hope for
+		// the best (in case a NAS is not running dramaqueen, it won’t shut
+		// down automatically anyway).
 		lockname := "backup-" + sourceHost
-		lockDramaqueen(destHost, lockname)
-		defer releaseDramaqueenLock(destHost, lockname)
+		if err := lockDramaqueen(destHost, lockname); err == nil {
+			defer releaseDramaqueenLock(destHost, lockname)
+		}
 
 		woken := false
 		if sourceMAC != "" {
