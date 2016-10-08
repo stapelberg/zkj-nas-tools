@@ -14,6 +14,7 @@ if (my ($destination) = ($ENV{SSH_ORIGINAL_COMMAND} =~ /^([a-z0-9.]+)$/)) {
     my $today = strftime("%Y-%m-%d", localtime);
     my @rsync = (
         "/usr/bin/rsync",
+	"--quiet",
         "-aXx",
         "--numeric-ids",
         "--relative",
