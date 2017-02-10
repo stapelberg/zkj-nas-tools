@@ -17,10 +17,6 @@ var (
 		":5555",
 		"[host]:port to listen on.")
 
-	videoProjectorSerialPath = flag.String("video_projector_serial_path",
-		"/dev/ttyUSB0",
-		"Path to the serial device node (e.g. /dev/ttyUSB0) which is connected to the Optoma HD25-LV")
-
 	midnaURL = flag.String("midna_url",
 		"http://midna:4000/",
 		"URL on which runstatus.go is accessible")
@@ -45,7 +41,6 @@ type State struct {
 	chromecastAudioPlaying bool
 	beastPowered           bool
 	midnaUnlocked          bool
-	videoProjectorPowered  bool
 	avrPowered             bool
 	avrSource              string
 	timestamp              time.Time
@@ -78,8 +73,6 @@ func stateMachine(current State) State {
 	if current.chromecastAudioPlaying {
 		next.avrSource = "AUX1"
 	}
-	// TODO: exclude google play music on chromecast
-	next.videoProjectorPowered = current.chromecastPlaying
 	return next
 }
 
@@ -100,8 +93,8 @@ func main() {
 			if i == stateHistoryPos {
 				arrow = "--> "
 			}
-			fmt.Fprintf(w, "%s%02d: %s video projector: %v, avr: %v, source: %q\n",
-				arrow, i, s.timestamp.Format("2006-01-02 15:04:05"), s.videoProjectorPowered, s.avrPowered, s.avrSource)
+			fmt.Fprintf(w, "%s%02d: %s avr: %v, source: %q\n",
+				arrow, i, s.timestamp.Format("2006-01-02 15:04:05"), s.avrPowered, s.avrSource)
 		}
 		// TODO: tail log
 	})
@@ -117,7 +110,6 @@ func main() {
 	go pingBeast()
 	go talkWithAvr()
 	go pollMidna()
-	go pollVideoProjector()
 
 	// Wait a little bit to give the various goroutines time to do their initial polls.
 	time.Sleep(10 * time.Second)
@@ -156,29 +148,6 @@ func main() {
 		if next.avrPowered && state.avrSource != next.avrSource {
 			log.Printf("Changing AVR source from %q to %q\n", state.avrSource, next.avrSource)
 			toAvr <- fmt.Sprintf("SI%s\r", next.avrSource)
-		}
-		if state.videoProjectorPowered != next.videoProjectorPowered {
-			if next.videoProjectorPowered {
-				log.Printf("Changing video projector power from %q to %q\n", state.videoProjectorPowered, next.videoProjectorPowered)
-				turnOnVideoProjector()
-			} else {
-				alwaysOff := true
-				for _, s := range stateHistory {
-					// If 60 seconds haven’t even passed or the video projector
-					// was supposed to be turned on at some point, don’t turn
-					// it off yet.
-					if s.timestamp.IsZero() || s.videoProjectorPowered {
-						alwaysOff = false
-						break
-					}
-				}
-				if alwaysOff {
-					log.Printf("Turning video projector off.\n")
-					turnOffVideoProjector()
-				} else {
-					log.Printf("Not turning video projector off yet (hysteresis).\n")
-				}
-			}
 		}
 		nextHistoryEntry := stateHistory[(stateHistoryPos+1)%len(stateHistory)]
 		keep := time.Since(nextHistoryEntry.timestamp) >= 60*time.Second
