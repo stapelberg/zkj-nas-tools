@@ -11,7 +11,7 @@ Programs
  revoke — webapp for easily revokable (secret) key sharing
  dramaqueen — shuts down the NAS once nobody is using it anymore
  dornröschen — wakes up machines/NASen to backup/sync
- avr-x1100w — orchestrates A/V receiver and video projector
+ avr-x1100w — orchestrates A/V receiver
  runstatus — exposes via HTTP whether a process is running
  homematic2prometheus — pushes HomeMatic data to Prometheus
  homematic-watchdog — shell script to reboot the HomeMatic CCU2
