@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/hashicorp/mdns"
+	"github.com/micro/mdns"
 	"github.com/stapelberg/zkj-nas-tools/avr-x1100w/cast_channel"
 )
 
