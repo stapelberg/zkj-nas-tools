@@ -225,17 +225,14 @@ func sync(NASen []string) {
 	}
 }
 
-func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	flag.Parse()
-
+func run() error {
 	if !*runBackup && !*runSync {
-		log.Fatal("Neither -backup nor -sync enabled, nothing to do.")
+		return fmt.Errorf("Neither -backup nor -sync enabled, nothing to do.")
 	}
 
 	storageList := strings.Split(*storageHosts, ",")
 	if len(storageList) > 2 {
-		log.Fatal("More than 2 -storage_hosts are not supported. Please send a patch to fix.")
+		return fmt.Errorf("More than 2 -storage_hosts are not supported. Please send a patch to fix.")
 	}
 
 	if *runBackup {
@@ -253,7 +250,5 @@ func main() {
 	prometheus.MustRegister(lastSuccess)
 	lastSuccess.Set(float64(time.Now().Unix()))
 
-	if err := prometheus.Push("dornroeschen", "dornroeschen", *pushGateway); err != nil {
-		log.Fatal(err)
-	}
+	return prometheus.Push("dornroeschen", "dornroeschen", *pushGateway)
 }
