@@ -72,11 +72,15 @@ func sshCommand(host, keypath, command string) (string, error) {
 	if command == "" {
 		return "", session.Start(command)
 	}
-	output, err := session.CombinedOutput(command)
+	f, err := ioutil.TempFile("", "dornröschen-")
 	if err != nil {
-		return "", fmt.Errorf(`Could not execute SSH command "%s":
-		%s
-		%v`, command, output, err)
+		return "", err
 	}
-	return string(output), nil
+	defer f.Close()
+	session.Stdout = f
+	session.Stderr = f
+	if err := session.Run(command); err != nil {
+		return f.Name(), fmt.Errorf("Could not execute SSH command %q, please see %q", command, f.Name())
+	}
+	return f.Name(), nil
 }

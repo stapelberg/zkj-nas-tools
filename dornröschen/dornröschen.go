@@ -177,12 +177,12 @@ func backup(NASen []string) {
 		// The command is just destHost, because for the SSH key this program
 		// is using, the remote host will only ever run /root/backup.pl, which
 		// interprets the command as the destination host.
-		output, err := sshCommand(sourceHost, *backupPrivateKeyPath, destHost)
+		outputfile, err := sshCommand(sourceHost, *backupPrivateKeyPath, destHost)
 		if err != nil {
 			log.Printf("Backup of %s failed: %v\n", sourceHost, err)
 			continue
 		}
-		log.Printf("backup command on %s yielded %s\n", sourceHost, output)
+		log.Printf("backup command output for %s stored in %s\n", sourceHost, outputfile)
 
 		// Suspend the machine to RAM, but only if we have woken it up.
 		if !woken {
@@ -210,11 +210,11 @@ func sync(NASen []string) {
 		destHost, _ := splitHostMAC(dest)
 		log.Printf("Syncing %s to %s\n", sourceHost, destHost)
 
-		output, err := sshCommand(sourceHost, *syncPrivateKeyPath, destHost)
+		outputfile, err := sshCommand(sourceHost, *syncPrivateKeyPath, destHost)
 		if err != nil {
 			log.Printf("Syncing of %s to %s failed: %v\n", sourceHost, destHost, err)
 		}
-		log.Printf("sync %s to %s output: %s\n", sourceHost, destHost, output)
+		log.Printf("sync %s to %s output stored in %s\n", sourceHost, destHost, outputfile)
 	}
 
 	for _, dest := range NASen {
