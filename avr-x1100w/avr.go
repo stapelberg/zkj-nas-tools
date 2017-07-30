@@ -45,6 +45,16 @@ func talkWithAvr() {
 		conn, err := net.Dial("tcp", "avr:23")
 		if err != nil {
 			log.Print(err)
+			time.Sleep(1 * time.Second)
+			// drain toAvr to avoid deadlocks while the AVR is unreachable
+		Drain:
+			for {
+				select {
+				case <-toAvr:
+				default:
+					break Drain
+				}
+			}
 			continue
 		}
 		go func() {
