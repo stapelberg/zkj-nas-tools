@@ -22,6 +22,8 @@ func pingBeast() {
 
 		if latency != nil {
 			time.Sleep(1*time.Second - *latency)
+		} else {
+			time.Sleep(1 * time.Second)
 		}
 	}
 }
