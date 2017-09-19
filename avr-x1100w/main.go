@@ -10,6 +10,10 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	_ "net/http/pprof"
 )
 
 var (
@@ -43,12 +47,15 @@ type State struct {
 	midnaUnlocked          bool
 	avrPowered             bool
 	avrSource              string
+	roombaCanClean         bool
+	roombaCleaning         bool
 	timestamp              time.Time
 }
 
 var (
-	state       State
-	lastContact = make(map[string]time.Time)
+	state           State
+	lastContact     = make(map[string]time.Time)
+	roombaLastClean time.Time
 	// stateHistory stores the “next” state (output of stateMachine()), as
 	// calculated over the last 60s. This is used for hysteresis, i.e. not
 	// turning off the AVR/video projector immediately when input is gone.
@@ -73,12 +80,23 @@ func stateMachine(current State) State {
 	if current.chromecastAudioPlaying {
 		next.avrSource = "AUX1"
 	}
+	// Cleaning is okay between 10:15 and 13:00 on work days
+	now := time.Now()
+	hour, minute := now.Hour(), now.Minute()
+	next.roombaCanClean = now.Weekday() != time.Saturday &&
+		now.Weekday() != time.Sunday &&
+		((hour == 10 && minute > 15) || hour == 11 || hour == 12)
+	// Override: don’t clean if someone is at home
+	if next.avrPowered {
+		next.roombaCanClean = false
+	}
 	return next
 }
 
 func main() {
 	flag.Parse()
 
+	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		stateMu.RLock()
 		defer stateMu.RUnlock()
@@ -110,6 +128,7 @@ func main() {
 	go pingBeast()
 	go talkWithAvr()
 	go pollMidna()
+	go scheduleRoomba()
 
 	// Wait a little bit to give the various goroutines time to do their initial polls.
 	time.Sleep(10 * time.Second)
@@ -149,6 +168,17 @@ func main() {
 			log.Printf("Changing AVR source from %q to %q\n", state.avrSource, next.avrSource)
 			toAvr <- fmt.Sprintf("SI%s\r", next.avrSource)
 		}
+
+		if next.roombaCanClean && roombaLastClean.YearDay() != time.Now().YearDay() {
+			roombaLastClean = time.Now()
+			log.Printf("Instructing Roomba to clean")
+			toRoomba <- "start"
+		}
+		if !next.roombaCanClean && state.roombaCleaning {
+			log.Printf("Instructing Roomba to return to dock")
+			toRoomba <- "dock"
+		}
+
 		nextHistoryEntry := stateHistory[(stateHistoryPos+1)%len(stateHistory)]
 		keep := time.Since(nextHistoryEntry.timestamp) >= 60*time.Second
 		if nextHistoryEntry.timestamp.IsZero() {
