@@ -16,6 +16,7 @@ package main
 
 import (
 	"crypto/tls"
+	"errors"
 	"flag"
 	"log"
 	"net"
@@ -24,6 +25,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"syscall"
+
+	"golang.org/x/crypto/acme/autocert"
 )
 
 var (
@@ -39,6 +42,7 @@ var (
 	tlsKeyPath = flag.String("tls_key_path",
 		"",
 		"Path to a .pem file containing the TLS private key.")
+	letsEncryptDomain = flag.String("lets_encrypt_domain", "", "Domain name to request a LetsEncrypt certificate for. Mutually exclusive with tls_cert_path and tls_key_path.")
 
 	fileNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 )
@@ -118,28 +122,41 @@ func revokeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(":-(\n"))
 }
 
+func listen() (net.Listener, error) {
+	if *letsEncryptDomain != "" {
+		if *tlsCertPath != "" || *tlsKeyPath != "" {
+			return nil, errors.New("lets_encrypt_domain is mutually exclusive with -tls_cert_path and -tls_key_path.")
+		}
+		return autocert.NewListener(*letsEncryptDomain), nil
+	}
+
+	l, err := net.Listen("tcp", *listenAddress)
+	if err != nil || *tlsCertPath == "" || *tlsKeyPath == "" {
+		return l, err
+	}
+	tlsConfig := &tls.Config{
+		NextProtos:   []string{"http/1.1"},
+		Certificates: make([]tls.Certificate, 1),
+	}
+
+	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(*tlsCertPath, *tlsKeyPath)
+	if err != nil {
+		l.Close()
+		return nil, err
+	}
+
+	return tls.NewListener(l, tlsConfig), nil
+}
+
 func main() {
 	flag.Parse()
 
 	http.HandleFunc("/", accessHandler)
 	http.HandleFunc("/_revoke/", revokeHandler)
 
-	listener, err := net.Listen("tcp", *listenAddress)
+	listener, err := listen()
 	if err != nil {
 		log.Fatal(err)
-	}
-	if *tlsCertPath != "" && *tlsKeyPath != "" {
-		tlsConfig := &tls.Config{
-			NextProtos:   []string{"http/1.1"},
-			Certificates: make([]tls.Certificate, 1),
-		}
-
-		tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(*tlsCertPath, *tlsKeyPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		listener = tls.NewListener(listener, tlsConfig)
 	}
 	srv := http.Server{Addr: *listenAddress}
 	log.Fatal(srv.Serve(listener))
