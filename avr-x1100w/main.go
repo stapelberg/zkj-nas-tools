@@ -69,7 +69,7 @@ var (
 func stateMachine(current State) State {
 	var next State
 
-	next.avrPowered = current.chromecastPlaying || current.chromecastAudioPlaying || current.beastPowered || current.midnaUnlocked
+	next.avrPowered = current.chromecastAudioPlaying || current.beastPowered || current.midnaUnlocked
 	next.avrSource = "MPLAY"
 	if current.beastPowered {
 		next.avrSource = "BD"
