@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"syscall"
 
 	"golang.org/x/crypto/acme/autocert"
@@ -122,12 +123,52 @@ func revokeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(":-(\n"))
 }
 
+// copied from golang.org/x/crypto/acme/autocert/listener.go
+func homeDir() string {
+	if runtime.GOOS == "windows" {
+		return os.Getenv("HOMEDRIVE") + os.Getenv("HOMEPATH")
+	}
+	if h := os.Getenv("HOME"); h != "" {
+		return h
+	}
+	return "/"
+}
+
+// copied from golang.org/x/crypto/acme/autocert/listener.go
+func cacheDir() string {
+	const base = "golang-autocert"
+	switch runtime.GOOS {
+	case "darwin":
+		return filepath.Join(homeDir(), "Library", "Caches", base)
+	case "windows":
+		for _, ev := range []string{"APPDATA", "CSIDL_APPDATA", "TEMP", "TMP"} {
+			if v := os.Getenv(ev); v != "" {
+				return filepath.Join(v, base)
+			}
+		}
+		// Worst case:
+		return filepath.Join(homeDir(), base)
+	}
+	if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" {
+		return filepath.Join(xdg, base)
+	}
+	return filepath.Join(homeDir(), ".cache", base)
+}
+
 func listen() (net.Listener, error) {
 	if *letsEncryptDomain != "" {
 		if *tlsCertPath != "" || *tlsKeyPath != "" {
 			return nil, errors.New("lets_encrypt_domain is mutually exclusive with -tls_cert_path and -tls_key_path.")
 		}
-		return autocert.NewListener(*letsEncryptDomain), nil
+
+		m := &autocert.Manager{
+			Cache:      autocert.DirCache(cacheDir()),
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(*letsEncryptDomain),
+		}
+		go http.ListenAndServe(":http", m.HTTPHandler(nil))
+
+		return m.Listener(), nil
 	}
 
 	l, err := net.Listen("tcp", *listenAddress)
