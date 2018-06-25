@@ -46,7 +46,6 @@ type State struct {
 	beastPowered           bool
 	midnaUnlocked          bool
 	avrPowered             bool
-	avrSource              string
 	roombaCanClean         bool
 	roombaCleaning         bool
 	timestamp              time.Time
@@ -70,16 +69,6 @@ func stateMachine(current State) State {
 	var next State
 
 	next.avrPowered = current.chromecastAudioPlaying || current.beastPowered || current.midnaUnlocked
-	next.avrSource = "MPLAY"
-	if current.beastPowered {
-		next.avrSource = "BD"
-	}
-	if current.chromecastPlaying {
-		next.avrSource = "GAME"
-	}
-	if current.chromecastAudioPlaying {
-		next.avrSource = "AUX1"
-	}
 	// Cleaning is okay between 10:15 and 13:00 on work days
 	now := time.Now()
 	hour, minute := now.Hour(), now.Minute()
@@ -111,8 +100,8 @@ func main() {
 			if i == stateHistoryPos {
 				arrow = "--> "
 			}
-			fmt.Fprintf(w, "%s%02d: %s avr: %v, source: %q\n",
-				arrow, i, s.timestamp.Format("2006-01-02 15:04:05"), s.avrPowered, s.avrSource)
+			fmt.Fprintf(w, "%s%02d: %s avr: %v\n",
+				arrow, i, s.timestamp.Format("2006-01-02 15:04:05"), s.avrPowered)
 		}
 		// TODO: tail log
 	})
@@ -126,7 +115,6 @@ func main() {
 
 	go discoverAndPollChromecasts()
 	go pingBeast()
-	go talkWithAvr()
 	go pollMidna()
 	go scheduleRoomba()
 
@@ -141,10 +129,10 @@ func main() {
 		log.Printf("determining outputs based on %+v\n", state)
 		next := stateMachine(state)
 		log.Printf("syncing outputs, next = %+v\n", next)
-		if state.avrPowered != next.avrPowered && (!next.avrPowered || state.avrSource == next.avrSource) {
+		if state.avrPowered != next.avrPowered {
+			var avrCmd string
 			if next.avrPowered {
-				log.Printf("Powering on AVR\n")
-				toAvr <- "PWON\r"
+				avrCmd = "on"
 			} else {
 				alwaysOff := true
 				for _, s := range stateHistory {
@@ -157,16 +145,28 @@ func main() {
 					}
 				}
 				if alwaysOff {
-					log.Printf("Turning AVR off.\n")
-					toAvr <- "PWSTANDBY\r"
+					avrCmd = "off"
 				} else {
 					log.Printf("Not turning AVR off yet (hysteresis).\n")
 				}
 			}
-		}
-		if next.avrPowered && state.avrSource != next.avrSource {
-			log.Printf("Changing AVR source from %q to %q\n", state.avrSource, next.avrSource)
-			toAvr <- fmt.Sprintf("SI%s\r", next.avrSource)
+			if avrCmd != "" {
+				log.Printf("Powering %s AVR", avrCmd)
+				resp, err := http.Get("http://localhost:8012/power/" + avrCmd)
+				if err != nil {
+					log.Println(err)
+				} else {
+					if got, want := resp.StatusCode, http.StatusOK; got != want {
+						log.Printf("unexpected HTTP status code: got %v, want %v", got, want)
+					} else {
+						stateMu.RUnlock()
+						stateMu.Lock()
+						state.avrPowered = avrCmd == "on"
+						stateMu.Unlock()
+						stateMu.RLock()
+					}
+				}
+			}
 		}
 
 		if next.roombaCanClean && roombaLastClean.YearDay() != time.Now().YearDay() {
