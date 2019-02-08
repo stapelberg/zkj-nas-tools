@@ -54,7 +54,7 @@ func init() {
 	mqtt.DEBUG = log.New(os.Stdout, "mqtt ", log.LstdFlags)
 }
 
-var toRoomba = make(chan string)
+var toRoomba = make(chan string, 1)
 
 func scheduleRoomba() {
 	for {

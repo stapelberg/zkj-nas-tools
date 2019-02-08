@@ -184,11 +184,17 @@ func main() {
 		if next.roombaCanClean && roombaLastClean.YearDay() != time.Now().YearDay() {
 			roombaLastClean = time.Now()
 			log.Printf("Instructing Roomba to clean")
-			toRoomba <- "start"
+			select {
+			case toRoomba <- "start":
+			default:
+			}
 		}
 		if !next.roombaCanClean && state.roombaCleaning {
 			log.Printf("Instructing Roomba to return to dock")
-			toRoomba <- "dock"
+			select {
+			case toRoomba <- "dock":
+			default:
+			}
 		}
 
 		nextHistoryEntry := stateHistory[(stateHistoryPos+1)%len(stateHistory)]
