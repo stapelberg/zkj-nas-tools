@@ -44,6 +44,8 @@ Installation
 These are notes I took when I set up “revoke” on my server:
 
 adduser --no-create-home --home /etc/revoke --disabled-login --gid 65534 revoke
+install -d -o revoke -g nogroup /etc/revoke
+# rsync
 chown -R revoke.nogroup /etc/revoke
 find /etc/revoke -type d -exec chmod 0700 '{}' \;     
 find /etc/revoke -type f -exec chmod 0400 '{}' \;
