@@ -4,7 +4,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"math"
 	"net"
 	"net/http"
@@ -12,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stapelberg/zkj-nas-tools/ping"
 )
 
@@ -24,23 +22,20 @@ var (
 		true,
 		"Sync all -storage_hosts? See also -backup")
 	backupHosts = flag.String("backup_hosts",
-		"midna/38:60:77:ab:d3:ea,x200/00:1f:16:1a:f5:b8",
+		"midna/38:60:77:ab:d3:ea,eris.noname-ev.de/,ex61.zekjur.net/,ex62.zekjur.net/",
 		"Comma-separated list of hosts to back up, each entry is host/mac-address")
 	storageHosts = flag.String("storage_hosts",
-		"10.0.0.250/00:08:9b:d0:31:ef,10.0.0.251/00:08:9b:d1:6f:39",
+		"10.0.0.252/d0:50:99:9a:0f:4a,10.0.0.251/00:08:9b:d1:6f:39",
 		"Comma-separated list of NASen, each entry is host/mac-address")
 	backupPrivateKeyPath = flag.String("ssh_backup_private_key_path",
-		"/root/.ssh/id_rsa_backup",
+		"/perm/id_rsa_backup",
 		"Path to the SSH private key file to authenticate with at -backup_hosts for backing up")
 	suspendPrivateKeyPath = flag.String("ssh_suspend_private_key_path",
-		"/root/.ssh/id_rsa_suspend",
+		"/perm/id_rsa_suspend",
 		"Path to the SSH private key file to authenticate with at -backup_hosts for suspending to RAM")
 	syncPrivateKeyPath = flag.String("ssh_sync_private_key_path",
-		"/root/.ssh/id_rsa_sync",
+		"/perm/id_rsa_sync",
 		"Path to the SSH private key file to authenticate with at -storage_hosts for syncing")
-	pushGateway = flag.String("prometheus_push_gateway",
-		"http://pushgateway.zekjur.net:9091/",
-		"URL of a https://github.com/prometheus/pushgateway instance")
 )
 
 func splitHostMAC(hostmac string) (host, mac string) {
@@ -152,6 +147,8 @@ func backup(NASen []string) {
 		log.Fatalf("Could not wake up NAS %s\n", destHost)
 	}
 
+	time.Sleep(10 * time.Second) // to finish boot
+
 	for _, source := range strings.Split(*backupHosts, ",") {
 		sourceHost, sourceMAC := splitHostMAC(source)
 
@@ -243,12 +240,5 @@ func run() error {
 		sync(storageList)
 	}
 
-	lastSuccess := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "last_success",
-		Help: "Timestamp of the last success",
-	})
-	prometheus.MustRegister(lastSuccess)
-	lastSuccess.Set(float64(time.Now().Unix()))
-
-	return prometheus.Push("dornroeschen", "dornroeschen", *pushGateway)
+	return nil
 }

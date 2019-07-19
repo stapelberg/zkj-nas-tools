@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -50,6 +49,9 @@ func newSshConnection(host, keypath string) (*ssh.Client, error) {
 	clientConfig := &ssh.ClientConfig{
 		User: "root",
 		Auth: []ssh.AuthMethod{clientauth},
+		// Sending the backup destination IP address to an attacker is
+		// not a threat I’m worried about.
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
 	client, err := ssh.Dial("tcp", host+":22", clientConfig)

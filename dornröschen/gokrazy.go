@@ -3,16 +3,63 @@
 package main
 
 import (
-	"log"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gokrazy/gokrazy"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/stapelberg/zkj-nas-tools/internal/teelogger"
 )
 
-func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+var (
+	listen = flag.String("listen",
+		":8014",
+		"[host]:port to listen on (for prometheus HTTP exports)")
 
+	lastSuccessPath = flag.String("last_success_path",
+		"/perm/dr-last-success.txt",
+		"path to a file in which to load/store the last success timestamp")
+)
+
+var log = teelogger.NewRemoteSyslog()
+
+var lastSuccess = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "last_success",
+	Help: "Timestamp of the last success",
+})
+
+func init() {
+	prometheus.MustRegister(lastSuccess)
+}
+
+func loadLastSuccess() error {
+	b, err := ioutil.ReadFile(*lastSuccessPath)
+	if err != nil {
+		return err
+	}
+	i, err := strconv.ParseInt(strings.TrimSpace(string(b)), 0, 64)
+	if err != nil {
+		return err
+	}
+	lastSuccess.Set(float64(i))
+	return nil
+}
+
+func main() {
 	gokrazy.WaitForClock()
+
+	if err := loadLastSuccess(); err != nil {
+		log.Printf("could not load last success timestamp from disk: %v", err)
+	}
+
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(*listen, nil)
 
 	// Run forever, trigger a run at 10:00 each Monday through Friday.
 	for {
@@ -37,6 +84,11 @@ func main() {
 				log.Println("Running dornröschen")
 				if err := run(); err != nil {
 					log.Printf("failed: %v", err)
+				}
+				unix := time.Now().Unix()
+				lastSuccess.Set(float64(unix))
+				if err := ioutil.WriteFile(*lastSuccessPath, []byte(fmt.Sprintf("%d", unix)), 0600); err != nil {
+					log.Printf("could not persist last success timestamp to disk: %v", err)
 				}
 			}
 		}
