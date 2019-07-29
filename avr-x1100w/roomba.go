@@ -6,21 +6,20 @@ import (
 	"flag"
 	"log"
 	"net/url"
-	"os"
 	"time"
 
-	"github.com/eclipse/paho.mqtt.golang"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
 	blid = flag.String("blid",
-		"9995801850128999",
+		"3115801850128630",
 		"Roomba BLID, identifying the roomba which should be controlled")
 
-	password = flag.String("password",
+	password = flag.String("roomba_password",
 		"secret",
-		"Roomba password (TODO: how to obtain?)")
+		"Roomba password (see https://github.com/koalazak/dorita980#how-to-get-your-usernameblid-and-password and https://github.com/pschmitt/roombapy/blob/master/roomba/password.py)")
 )
 
 var (
@@ -51,7 +50,7 @@ func init() {
 	prometheus.MustRegister(dustBinFull)
 	prometheus.MustRegister(batteryPercentage)
 
-	mqtt.DEBUG = log.New(os.Stdout, "mqtt ", log.LstdFlags)
+	//mqtt.DEBUG = log.New(os.Stdout, "mqtt ", log.LstdFlags)
 }
 
 var toRoomba = make(chan string, 1)
@@ -78,12 +77,12 @@ func schedule() error {
 		Password:        *password,
 		CleanSession:    false,
 		ProtocolVersion: 4,
-		KeepAlive:       1 * time.Minute,
+		KeepAlive:       int64(1 * time.Minute / time.Second),
 		PingTimeout:     5 * time.Minute,
 		AutoReconnect:   true,
 		// TODO: can we verify the certificate?
 		TLSConfig: tls.Config{InsecureSkipVerify: true},
-		DefaultPublishHander: func(cl mqtt.Client, msg mqtt.Message) {
+		DefaultPublishHandler: func(cl mqtt.Client, msg mqtt.Message) {
 			//log.Printf("cl: %v, msg = %v", cl, msg)
 			log.Printf("topic %q, id %d, payload %s", msg.Topic(), msg.MessageID(), string(msg.Payload()))
 		},
