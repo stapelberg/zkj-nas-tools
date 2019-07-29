@@ -44,7 +44,8 @@ func pollDifmx() {
 		}
 
 		stateMu.Lock()
-		state.difmxChannel = channel
+		_ = channel
+		//state.difmxChannel = channel
 		lastContact["difmx"] = time.Now()
 		stateMu.Unlock()
 		stateChanged.Broadcast()

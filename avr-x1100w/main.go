@@ -48,8 +48,8 @@ type State struct {
 	avrPowered             bool
 	roombaCanClean         bool
 	roombaCleaning         bool
-	difmxChannel           int
-	timestamp              time.Time
+	//difmxChannel           int
+	timestamp time.Time
 }
 
 var (
@@ -70,10 +70,10 @@ func stateMachine(current State) State {
 	var next State
 
 	next.avrPowered = current.chromecastAudioPlaying || current.beastPowered || current.midnaUnlocked
-	next.difmxChannel = 0 // midna
-	if current.beastPowered {
-		next.difmxChannel = 1 // beast
-	}
+	// next.difmxChannel = 0 // midna
+	// if current.beastPowered {
+	// 	next.difmxChannel = 1 // beast
+	// }
 	// Cleaning is okay between 10:15 and 13:00 on work days
 	now := time.Now()
 	hour, minute := now.Hour(), now.Minute()
@@ -122,7 +122,7 @@ func main() {
 	go pingBeast()
 	go pollMidna()
 	go scheduleRoomba()
-	go pollDifmx()
+	//go pollDifmx()
 
 	// Wait a little bit to give the various goroutines time to do their initial polls.
 	time.Sleep(10 * time.Second)
@@ -175,11 +175,11 @@ func main() {
 			}
 		}
 
-		if state.difmxChannel != next.difmxChannel {
-			if err := switchDifmxChannel(next.difmxChannel); err != nil {
-				log.Printf("switchDifmxChannel: %v", err)
-			}
-		}
+		// if state.difmxChannel != next.difmxChannel {
+		// 	if err := switchDifmxChannel(next.difmxChannel); err != nil {
+		// 		log.Printf("switchDifmxChannel: %v", err)
+		// 	}
+		// }
 
 		if next.roombaCanClean && roombaLastClean.YearDay() != time.Now().YearDay() {
 			roombaLastClean = time.Now()
