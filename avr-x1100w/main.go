@@ -8,10 +8,12 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/stapelberg/zkj-nas-tools/internal/timestamped"
 
 	_ "net/http/pprof"
 )
@@ -28,8 +30,8 @@ var (
 
 type State struct {
 	beastPowered   bool
-	midnaUnlocked  bool
-	avrPowered     bool
+	midnaUnlocked  timestamped.Bool
+	avrPowered     timestamped.Bool
 	roombaCanClean bool
 	roombaCleaning bool
 	//difmxChannel           int
@@ -53,7 +55,7 @@ var (
 func stateMachine(current State) State {
 	var next State
 
-	next.avrPowered = current.beastPowered || current.midnaUnlocked
+	next.avrPowered.Set(current.beastPowered || current.midnaUnlocked.Value())
 	// next.difmxChannel = 0 // midna
 	// if current.beastPowered {
 	// 	next.difmxChannel = 1 // beast
@@ -65,7 +67,7 @@ func stateMachine(current State) State {
 		now.Weekday() != time.Sunday &&
 		((hour == 10 && minute > 15) || hour == 11 || hour == 12)
 	// Override: don’t clean if someone is at home
-	if next.avrPowered {
+	if next.avrPowered.Value() {
 		next.roombaCanClean = false
 	}
 	return next
@@ -107,6 +109,7 @@ func main() {
 	go pollMidna()
 	go scheduleRoomba()
 	//go pollDifmx()
+	go pollAVR()
 
 	// Wait a little bit to give the various goroutines time to do their initial polls.
 	time.Sleep(10 * time.Second)
@@ -116,25 +119,16 @@ func main() {
 		stateChanged.Wait()
 
 		stateMu.RLock()
-		log.Printf("determining outputs based on %+v\n", state)
-		next := stateMachine(state)
-		log.Printf("syncing outputs, next = %+v\n", next)
-		if state.avrPowered != next.avrPowered {
+		fmt.Fprintln(os.Stderr)
+		log.Printf("current state: %+v\n", state)
+		desired := stateMachine(state)
+		log.Printf("desired state: %+v\n", desired)
+		if state.avrPowered.Value() != desired.avrPowered.Value() {
 			var avrCmd string
-			if next.avrPowered {
+			if desired.avrPowered.Value() {
 				avrCmd = "on"
 			} else {
-				alwaysOff := true
-				for _, s := range stateHistory {
-					// If 60 seconds haven’t even passed or the AVR was
-					// supposed to be turned on at some point, don’t turn it
-					// off yet.
-					if s.timestamp.IsZero() || s.avrPowered {
-						alwaysOff = false
-						break
-					}
-				}
-				if alwaysOff {
+				if time.Since(state.avrPowered.LastChange()) > 1*time.Minute {
 					avrCmd = "off"
 				} else {
 					log.Printf("Not turning AVR off yet (hysteresis).\n")
@@ -145,16 +139,8 @@ func main() {
 				resp, err := http.Get("http://localhost:8012/power/" + avrCmd)
 				if err != nil {
 					log.Println(err)
-				} else {
-					if got, want := resp.StatusCode, http.StatusOK; got != want {
-						log.Printf("unexpected HTTP status code: got %v, want %v", got, want)
-					} else {
-						stateMu.RUnlock()
-						stateMu.Lock()
-						state.avrPowered = avrCmd == "on"
-						stateMu.Unlock()
-						stateMu.RLock()
-					}
+				} else if got, want := resp.StatusCode, http.StatusOK; got != want {
+					log.Printf("unexpected HTTP status code: got %v, want %v", got, want)
 				}
 			}
 		}
@@ -165,7 +151,7 @@ func main() {
 		// 	}
 		// }
 
-		if next.roombaCanClean && roombaLastClean.YearDay() != time.Now().YearDay() {
+		if desired.roombaCanClean && roombaLastClean.YearDay() != time.Now().YearDay() {
 			roombaLastClean = time.Now()
 			log.Printf("Instructing Roomba to clean")
 			select {
@@ -173,7 +159,7 @@ func main() {
 			default:
 			}
 		}
-		if !next.roombaCanClean && state.roombaCleaning {
+		if !desired.roombaCanClean && state.roombaCleaning {
 			log.Printf("Instructing Roomba to return to dock")
 			select {
 			case toRoomba <- "dock":
@@ -189,8 +175,8 @@ func main() {
 		stateMu.RUnlock()
 		if keep {
 			stateMu.Lock()
-			next.timestamp = time.Now()
-			stateHistory[stateHistoryPos] = next
+			desired.timestamp = time.Now()
+			stateHistory[stateHistoryPos] = desired
 			stateHistoryPos = (stateHistoryPos + 1) % len(stateHistory)
 			stateMu.Unlock()
 		}

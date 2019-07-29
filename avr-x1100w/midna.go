@@ -34,7 +34,7 @@ func pollMidna() {
 		}
 
 		stateMu.Lock()
-		state.midnaUnlocked = (status == "notrunning")
+		state.midnaUnlocked.Set(status == "notrunning")
 		lastContact["midna"] = time.Now()
 		stateMu.Unlock()
 		stateChanged.Broadcast()
