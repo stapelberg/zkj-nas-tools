@@ -4,3 +4,5 @@ dramaqueen/dramaqueen
 homematic2prometheus/homematic2prometheus
 revoke/revoke
 runstatus/runstatus
+coreos/
+avr-x1100w/secrets.go
