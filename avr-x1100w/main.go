@@ -32,7 +32,7 @@ type State struct {
 	beastPowered   bool
 	midnaUnlocked  timestamped.Bool
 	avrPowered     timestamped.Bool
-	roombaCanClean bool
+	roombaCanClean timestamped.Bool
 	roombaCleaning bool
 	//difmxChannel           int
 	timestamp time.Time
@@ -63,13 +63,14 @@ func stateMachine(current State) State {
 	// Cleaning is okay between 10:15 and 13:00 on work days
 	now := time.Now()
 	hour, minute := now.Hour(), now.Minute()
-	next.roombaCanClean = now.Weekday() != time.Saturday &&
+	roombaCanClean := now.Weekday() != time.Saturday &&
 		now.Weekday() != time.Sunday &&
 		((hour == 10 && minute > 15) || hour == 11 || hour == 12)
 	// Override: don’t clean if someone is at home
 	if next.avrPowered.Value() {
-		next.roombaCanClean = false
+		roombaCanClean = false
 	}
+	next.roombaCanClean.Set(roombaCanClean)
 	return next
 }
 
@@ -151,7 +152,9 @@ func main() {
 		// 	}
 		// }
 
-		if desired.roombaCanClean && roombaLastClean.YearDay() != time.Now().YearDay() {
+		if desired.roombaCanClean.Value() &&
+			time.Since(state.roombaCanClean.LastChange()) > 5*time.Minute &&
+			roombaLastClean.YearDay() != time.Now().YearDay() {
 			roombaLastClean = time.Now()
 			log.Printf("Instructing Roomba to clean")
 			select {
@@ -159,7 +162,7 @@ func main() {
 			default:
 			}
 		}
-		if !desired.roombaCanClean && state.roombaCleaning {
+		if !desired.roombaCanClean.Value() && state.roombaCleaning {
 			log.Printf("Instructing Roomba to return to dock")
 			select {
 			case toRoomba <- "dock":
