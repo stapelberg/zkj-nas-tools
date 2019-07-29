@@ -1,5 +1,3 @@
-// +build gokrazy
-
 package main
 
 import (
