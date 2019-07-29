@@ -4,6 +4,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net"
 	"net/http"
@@ -175,11 +176,22 @@ func backup(NASen []string) {
 		// is using, the remote host will only ever run /root/backup.pl, which
 		// interprets the command as the destination host.
 		outputfile, err := sshCommand(sourceHost, *backupPrivateKeyPath, destHost)
+		// Dump the output into the log, which is persisted via remote syslog:
+		logPrinted := false
+		if b, err := ioutil.ReadFile(outputfile); err == nil {
+			log.Printf("[%s] SSH output", sourceHost)
+			for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+				log.Printf("[%s]   %s", sourceHost, line)
+			}
+			log.Printf("[%s] End of SSH output", sourceHost)
+			logPrinted = true
+		}
 		if err != nil {
-			log.Printf("Backup of %s failed: %v\n", sourceHost, err)
+			if !logPrinted {
+				log.Printf("Backup of %s failed: %v\n", sourceHost, err)
+			}
 			continue
 		}
-		log.Printf("backup command output for %s stored in %s\n", sourceHost, outputfile)
 
 		// Suspend the machine to RAM, but only if we have woken it up.
 		if !woken {
