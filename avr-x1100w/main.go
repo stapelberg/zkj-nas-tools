@@ -27,13 +27,11 @@ var (
 )
 
 type State struct {
-	chromecastPlaying      bool
-	chromecastAudioPlaying bool
-	beastPowered           bool
-	midnaUnlocked          bool
-	avrPowered             bool
-	roombaCanClean         bool
-	roombaCleaning         bool
+	beastPowered   bool
+	midnaUnlocked  bool
+	avrPowered     bool
+	roombaCanClean bool
+	roombaCleaning bool
 	//difmxChannel           int
 	timestamp time.Time
 }
@@ -55,7 +53,7 @@ var (
 func stateMachine(current State) State {
 	var next State
 
-	next.avrPowered = current.chromecastAudioPlaying || current.beastPowered || current.midnaUnlocked
+	next.avrPowered = current.beastPowered || current.midnaUnlocked
 	// next.difmxChannel = 0 // midna
 	// if current.beastPowered {
 	// 	next.difmxChannel = 1 // beast
@@ -104,7 +102,7 @@ func main() {
 	srv := http.Server{Addr: *listen}
 	go srv.Serve(ln)
 
-	go discoverAndPollChromecasts()
+	//go discoverAndPollChromecasts()
 	go pingBeast()
 	go pollMidna()
 	go scheduleRoomba()

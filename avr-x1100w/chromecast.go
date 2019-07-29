@@ -199,9 +199,9 @@ func pollChromecast(deviceType chromecastDevice, done chan bool, hostport string
 
 						stateMu.Lock()
 						if deviceType == chromecast {
-							state.chromecastPlaying = true
+							//state.chromecastPlaying = true
 						} else if deviceType == chromecastAudio {
-							state.chromecastAudioPlaying = true
+							//state.chromecastAudioPlaying = true
 						}
 						stateMu.Unlock()
 						stateChanged.Broadcast()
@@ -211,9 +211,9 @@ func pollChromecast(deviceType chromecastDevice, done chan bool, hostport string
 				if !mediaFound {
 					stateMu.Lock()
 					if deviceType == chromecast {
-						state.chromecastPlaying = false
+						//state.chromecastPlaying = false
 					} else if deviceType == chromecastAudio {
-						state.chromecastAudioPlaying = false
+						//state.chromecastAudioPlaying = false
 					}
 					stateMu.Unlock()
 					stateChanged.Broadcast()
@@ -283,7 +283,7 @@ func discoverAndPollChromecasts() {
 				chromecastsMu.Unlock()
 			}(deviceType, done, hostport)
 			stateMu.Lock()
-			state.chromecastPlaying = false
+			//state.chromecastPlaying = false
 			stateMu.Unlock()
 			stateChanged.Broadcast()
 
