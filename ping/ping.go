@@ -5,11 +5,11 @@ package ping
 // which is published under the following license:
 //
 // Copyright (c) 2012 The Go Authors. All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
-// 
+//
 //    * Redistributions of source code must retain the above copyright
 // notice, this list of conditions and the following disclaimer.
 //    * Redistributions in binary form must reproduce the above
@@ -19,7 +19,7 @@ package ping
 //    * Neither the name of Google Inc. nor the names of its
 // contributors may be used to endorse or promote products derived from
 // this software without specific prior written permission.
-// 
+//
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 // "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 // LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -34,11 +34,17 @@ package ping
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"time"
+
+	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 const (
@@ -207,6 +213,133 @@ func Ping(addr string, timeout time.Duration, result chan *time.Duration) {
 			duration := time.Since(start)
 			result <- &duration
 			return
+		default:
+			log.Printf("[ping %s] got type=%v, code=%v; expected type=%v, code=%v", addr, m.Type, m.Code, icmpv4EchoRequest, 0)
+			// In case the target answered with an ICMP reply that is not ICMP
+			// echo, we skip it and either receive a proper reply later (in
+			// which case the other ICMP message was not a reply for us) or run
+			// into the timeout.
+			continue
+		}
+	}
+}
+
+var seq uint // TODO: atomic
+
+func PingUnprivileged(ctx context.Context, host string) (time.Duration, error) {
+	const protocol = 1 // iana.ProtocolICMP
+	c, err := icmp.ListenPacket("udp4", "0.0.0.0")
+	if err != nil {
+		return 0, err
+	}
+	defer c.Close()
+
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return 0, err
+	}
+	if len(ips) == 0 {
+		return 0, fmt.Errorf("Lookup(%v) = no IPs", host)
+	}
+	addr := &net.UDPAddr{IP: ips[0]}
+
+	m := icmp.Message{
+		Type: ipv4.ICMPTypeEcho, Code: 0,
+		Body: &icmp.Echo{
+			ID:   os.Getpid() & 0xffff,
+			Data: []byte("HELLO-R-U-THERE"),
+			Seq:  1 << uint(seq), // TODO: atomic
+		},
+	}
+	seq++ // TODO: atomic
+
+	wb, err := m.Marshal(nil)
+	if err != nil {
+		return 0, err
+	}
+	if n, err := c.WriteTo(wb, addr); err != nil {
+		return 0, err
+	} else if n != len(wb) {
+		return 0, fmt.Errorf("got %v; want %v", n, len(wb))
+	}
+
+	start := time.Now()
+	rb := make([]byte, 1500)
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := c.SetReadDeadline(deadline); err != nil {
+			return 0, err
+		}
+	}
+
+	n, peer, err := c.ReadFrom(rb)
+	if err != nil {
+		return 0, err
+	}
+	rm, err := icmp.ParseMessage(protocol, rb[:n])
+	if err != nil {
+		return 0, err
+	}
+	switch {
+	case m.Type == ipv4.ICMPTypeEcho && rm.Type == ipv4.ICMPTypeEchoReply:
+		fallthrough
+	case m.Type == ipv6.ICMPTypeEchoRequest && rm.Type == ipv6.ICMPTypeEchoReply:
+		fallthrough
+	case m.Type == ipv4.ICMPTypeExtendedEchoRequest && rm.Type == ipv4.ICMPTypeExtendedEchoReply:
+		fallthrough
+	case m.Type == ipv6.ICMPTypeExtendedEchoRequest && rm.Type == ipv6.ICMPTypeExtendedEchoReply:
+		return time.Since(start), nil
+	default:
+		return 0, fmt.Errorf("got %+v from %v; want echo reply or extended echo reply", rm, peer)
+	}
+}
+
+func PingContext(ctx context.Context, addr string) (time.Duration, error) {
+	var d net.Dialer
+	conn, err := d.DialContext(ctx, "udp4", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	start := time.Now()
+	if deadline, ok := ctx.Deadline(); ok {
+		conn.SetDeadline(deadline)
+	}
+
+	xid, xseq := os.Getpid()&0xffff, 1
+	b, err := (&icmpMessage{
+		Type: icmpv4EchoRequest, Code: 0,
+		Body: &icmpEcho{
+			ID: xid, Seq: xseq,
+			Data: bytes.Repeat([]byte("Go Go Gadget Ping!!!"), 3),
+		},
+	}).Marshal()
+	if err != nil {
+		return 0, fmt.Errorf("icmpMessage.Marshal: %v", err)
+	}
+	if _, err := conn.Write(b); err != nil {
+		return 0, fmt.Errorf("Write: %v", err)
+	}
+	var m *icmpMessage
+	for {
+		if _, err := conn.Read(b); err != nil {
+			return 0, fmt.Errorf("Read: %v", err)
+		}
+		b = ipv4Payload(b)
+
+		if m, err = parseICMPMessage(b); err != nil {
+			return 0, fmt.Errorf("parseICMPMessage: %v", addr, err)
+		}
+		switch p := m.Body.(type) {
+		case *icmpEcho:
+			if p.ID != xid || p.Seq != xseq {
+				// This can happen when somebody else is also sending ICMP echo
+				// requests — replies are sent to all the open sockets, so we
+				// get replies for other programs, too. Skip this reply and
+				// wait until either the right reply arrives or we run into the
+				// timeout.
+				continue
+			}
+			return time.Since(start), nil
 		default:
 			log.Printf("[ping %s] got type=%v, code=%v; expected type=%v, code=%v", addr, m.Type, m.Code, icmpv4EchoRequest, 0)
 			// In case the target answered with an ICMP reply that is not ICMP

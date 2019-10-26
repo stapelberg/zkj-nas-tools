@@ -2,16 +2,15 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"math"
-	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/stapelberg/zkj-nas-tools/internal/wakeonlan"
 	"github.com/stapelberg/zkj-nas-tools/ping"
 )
 
@@ -47,30 +46,6 @@ func splitHostMAC(hostmac string) (host, mac string) {
 	return parts[0], parts[1]
 }
 
-func sendWOL(mac string) error {
-	hwaddr, err := net.ParseMAC(mac)
-	if err != nil {
-		return err
-	}
-	if got, want := len(hwaddr), 6; got != want {
-		return fmt.Errorf("unexpected number of parts in hardware address %q: got %d, want %d", mac, got, want)
-	}
-
-	socket, err := net.DialUDP("udp4", nil, &net.UDPAddr{
-		IP:   net.IPv4bcast,
-		Port: 9, // discard
-	})
-	if err != nil {
-		return fmt.Errorf("DialUDP(broadcast:discard): %v", err)
-	}
-	// https://en.wikipedia.org/wiki/Wake-on-LAN#Magic_packet
-	payload := append(bytes.Repeat([]byte{0xff}, 6), bytes.Repeat(hwaddr, 16)...)
-	if _, err := socket.Write(payload); err != nil {
-		return err
-	}
-	return socket.Close()
-}
-
 func wakeUp(host, mac string) (bool, error) {
 	result := make(chan *time.Duration)
 	go ping.Ping(host, 5*time.Second, result)
@@ -80,7 +55,7 @@ func wakeUp(host, mac string) (bool, error) {
 	}
 
 	// Parse MAC address
-	if err := sendWOL(mac); err != nil {
+	if err := wakeonlan.SendMagicPacket(nil, mac); err != nil {
 		log.Printf("sendWOL: %v", err)
 	} else {
 		log.Printf("Sent magic packet to %v", mac)

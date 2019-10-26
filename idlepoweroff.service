@@ -1,0 +1,8 @@
+[Unit]
+Description=power off once idle
+
+[Service]
+ExecStart=/usr/bin/idlepoweroff
+
+[Install]
+WantedBy=multi-user.target
