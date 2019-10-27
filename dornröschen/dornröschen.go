@@ -2,13 +2,13 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +47,30 @@ func splitHostMAC(hostmac string) (host, mac string) {
 	return parts[0], parts[1]
 }
 
+func sendWOL(mac string) error {
+	hwaddr, err := net.ParseMAC(mac)
+	if err != nil {
+		return err
+	}
+	if got, want := len(hwaddr), 6; got != want {
+		return fmt.Errorf("unexpected number of parts in hardware address %q: got %d, want %d", mac, got, want)
+	}
+
+	socket, err := net.DialUDP("udp4", nil, &net.UDPAddr{
+		IP:   net.IPv4bcast,
+		Port: 9, // discard
+	})
+	if err != nil {
+		return fmt.Errorf("DialUDP(broadcast:discard): %v", err)
+	}
+	// https://en.wikipedia.org/wiki/Wake-on-LAN#Magic_packet
+	payload := append(bytes.Repeat([]byte{0xff}, 6), bytes.Repeat(hwaddr, 16)...)
+	if _, err := socket.Write(payload); err != nil {
+		return err
+	}
+	return socket.Close()
+}
+
 func wakeUp(host, mac string) (bool, error) {
 	result := make(chan *time.Duration)
 	go ping.Ping(host, 5*time.Second, result)
@@ -56,41 +80,11 @@ func wakeUp(host, mac string) (bool, error) {
 	}
 
 	// Parse MAC address
-	parts := strings.Split(mac, ":")
-	if len(parts) != 6 {
-		log.Fatalf(`MAC address "%s" does not consist of 6 parts`, mac)
+	if err := sendWOL(mac); err != nil {
+		log.Printf("sendWOL: %v", err)
+	} else {
+		log.Printf("Sent magic packet to %v", mac)
 	}
-	macParts := make([]uint8, 6)
-	for idx, str := range parts {
-		converted, err := strconv.ParseUint(str, 16, 8)
-		if err != nil {
-			log.Fatalf("Invalid MAC address part: %s: %v\n", str, err)
-		}
-		macParts[idx] = uint8(converted)
-	}
-
-	// Send magic Wake-On-LAN packet
-	payload := make([]byte, 102)
-	for idx := 0; idx < 6; idx++ {
-		payload[idx] = 0xff
-	}
-	for n := 0; n < 16; n++ {
-		for part := 0; part < 6; part++ {
-			payload[6+(n*6)+part] = macParts[part]
-		}
-	}
-	socket, err := net.DialUDP("udp4", nil, &net.UDPAddr{
-		IP: net.IPv4(255, 255, 255, 255),
-		// udp/9 is the discard protocol
-		Port: 9,
-	})
-	if err != nil {
-		log.Fatalf("Cannot open UDP broadcast socket: %v\n", err)
-	}
-	socket.Write(payload)
-	socket.Close()
-	log.Printf("Sent magic packet to %02x:%02x:%02x:%02x:%02x:%02x\n",
-		macParts[0], macParts[1], macParts[2], macParts[3], macParts[4], macParts[5])
 
 	timeout := 120 * time.Second
 	packetSent := time.Now()
