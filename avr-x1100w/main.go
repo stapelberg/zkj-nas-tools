@@ -154,7 +154,8 @@ func main() {
 
 		if desired.roombaCanClean.Value() &&
 			time.Since(state.roombaCanClean.LastChange()) > 5*time.Minute &&
-			roombaLastClean.YearDay() != time.Now().YearDay() {
+			roombaLastClean.YearDay() != time.Now().YearDay() &&
+			time.Now().Weekday() != time.Tuesday {
 			roombaLastClean = time.Now()
 			log.Printf("Instructing Roomba to clean")
 			select {
