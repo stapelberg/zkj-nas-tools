@@ -27,9 +27,9 @@ var (
 	netCommand = flag.String("net_command",
 		"net",
 		"“net” command, called as “net status sessions parseable”.")
-	idleSeconds = flag.Int("idle_seconds",
-		10,
-		"time in seconds to wait before actually shutting down.")
+	idleDuration = flag.Duration("idle",
+		10*time.Minute,
+		"time to wait before actually shutting down.")
 	listenAddress = flag.String("listen_address",
 		":4414",
 		"host:port to listen on (http).")
@@ -85,7 +85,7 @@ func checkShutdown() {
 			continue
 		}
 
-		if time.Since(possibleSince) <= time.Duration(*idleSeconds)*time.Second {
+		if time.Since(possibleSince) <= *idleDuration {
 			continue
 		}
 
