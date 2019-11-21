@@ -13,13 +13,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/stapelberg/zkj-nas-tools/ping"
 	"log"
 	"net/http"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/stapelberg/zkj-nas-tools/ping"
 )
 
 var (
@@ -91,7 +92,7 @@ func checkShutdown() {
 		cmd := exec.Command("systemctl", "poweroff")
 		err := cmd.Run()
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("%v: %v", cmd.Args, err)
 		}
 
 		time.Sleep(60)
@@ -101,6 +102,10 @@ func checkShutdown() {
 
 // Runs infinitely as a goroutine, periodically pinging samba users.
 func pingUsers() {
+	if *netCommand == "" {
+		reachableUsers = false
+		return
+	}
 	for {
 		statusLock.Lock()
 		hosts = getSessionHostnames()
