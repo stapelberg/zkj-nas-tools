@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -120,10 +119,10 @@ func main() {
 		stateChanged.Wait()
 
 		stateMu.RLock()
-		fmt.Fprintln(os.Stderr)
-		log.Printf("current state: %+v\n", state)
+		//fmt.Fprintln(os.Stderr)
+		//log.Printf("current state: %+v\n", state)
 		desired := stateMachine(state)
-		log.Printf("desired state: %+v\n", desired)
+		//log.Printf("desired state: %+v\n", desired)
 		if state.avrPowered.Value() != desired.avrPowered.Value() {
 			var avrCmd string
 			if desired.avrPowered.Value() {
