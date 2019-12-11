@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	llog "log"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,7 +13,6 @@ import (
 	"github.com/gokrazy/gokrazy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/stapelberg/zkj-nas-tools/internal/teelogger"
 )
 
 var (
@@ -25,8 +24,6 @@ var (
 		"/perm/dr-last-success.txt",
 		"path to a file in which to load/store the last success timestamp")
 )
-
-var log *llog.Logger
 
 var lastSuccess = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name: "last_success",
@@ -52,8 +49,6 @@ func loadLastSuccess() error {
 
 func main() {
 	gokrazy.WaitForClock()
-	// Once the clock is available, network is available, too:
-	log = teelogger.NewRemoteSyslog()
 
 	if err := loadLastSuccess(); err != nil {
 		log.Printf("could not load last success timestamp from disk: %v", err)
