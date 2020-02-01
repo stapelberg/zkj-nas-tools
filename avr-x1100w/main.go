@@ -33,6 +33,7 @@ type State struct {
 	avrPowered     timestamped.Bool
 	roombaCanClean timestamped.Bool
 	roombaCleaning bool
+	galaxyActive   timestamped.Bool
 	//difmxChannel           int
 	timestamp time.Time
 }
@@ -54,7 +55,6 @@ var (
 func stateMachine(current State) State {
 	var next State
 
-	next.avrPowered.Set(current.beastPowered || current.midnaUnlocked.Value())
 	// next.difmxChannel = 0 // midna
 	// if current.beastPowered {
 	// 	next.difmxChannel = 1 // beast
@@ -70,6 +70,9 @@ func stateMachine(current State) State {
 		roombaCanClean = false
 	}
 	next.roombaCanClean.Set(roombaCanClean)
+	next.avrPowered.Set(current.beastPowered ||
+		current.midnaUnlocked.Value() ||
+		(hour > 8 && current.galaxyActive.Value()))
 	return next
 }
 
@@ -110,6 +113,7 @@ func main() {
 	go scheduleRoomba()
 	//go pollDifmx()
 	go pollAVR()
+	go pollDHCP()
 
 	// Wait a little bit to give the various goroutines time to do their initial polls.
 	time.Sleep(10 * time.Second)
