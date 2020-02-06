@@ -34,6 +34,7 @@ type State struct {
 	roombaCanClean timestamped.Bool
 	roombaCleaning bool
 	galaxyActive   timestamped.Bool
+	iphoneActive   timestamped.Bool
 	//difmxChannel           int
 	timestamp time.Time
 }
@@ -73,7 +74,7 @@ func stateMachine(current State) State {
 	next.roombaCanClean.Set(roombaCanClean)
 	next.avrPowered.Set(current.beastPowered ||
 		current.midnaUnlocked.Value() ||
-		(hour > 8 && current.galaxyActive.Value()))
+		(hour > 8 && (current.galaxyActive.Value() || current.iphoneActive.Value())))
 	return next
 }
 
