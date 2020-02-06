@@ -64,7 +64,8 @@ func stateMachine(current State) State {
 	hour, minute := now.Hour(), now.Minute()
 	roombaCanClean := now.Weekday() != time.Saturday &&
 		now.Weekday() != time.Sunday &&
-		((hour == 10 && minute > 15) || hour == 11 || hour == 12)
+		((hour == 10 && minute > 15) || hour == 11 || hour == 12) &&
+		!current.galaxyActive.Value()
 	// Override: don’t clean if someone is at home
 	if next.avrPowered.Value() {
 		roombaCanClean = false
