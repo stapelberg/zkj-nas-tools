@@ -166,13 +166,14 @@ func main() {
 			default:
 			}
 		}
-		if !desired.roombaCanClean.Value() && state.roombaCleaning {
-			log.Printf("Instructing Roomba to return to dock")
-			select {
-			case toRoomba <- "dock":
-			default:
-			}
-		}
+		// Commented out: if humans trigger a roomba cleaning, we shouldn’t interfere
+		// if !desired.roombaCanClean.Value() && state.roombaCleaning {
+		// 	log.Printf("Instructing Roomba to return to dock")
+		// 	select {
+		// 	case toRoomba <- "dock":
+		// 	default:
+		// 	}
+		// }
 
 		nextHistoryEntry := stateHistory[(stateHistoryPos+1)%len(stateHistory)]
 		keep := time.Since(nextHistoryEntry.timestamp) >= 60*time.Second
