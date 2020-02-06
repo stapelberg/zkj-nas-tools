@@ -132,7 +132,7 @@ func main() {
 			if desired.avrPowered.Value() {
 				avrCmd = "on"
 			} else {
-				if time.Since(state.avrPowered.LastChange()) > 1*time.Minute {
+				if time.Since(state.avrPowered.LastChange()) > 10*time.Minute {
 					avrCmd = "off"
 				} else {
 					log.Printf("Not turning AVR off yet (hysteresis).\n")
