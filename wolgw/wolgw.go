@@ -43,7 +43,7 @@ func logic() error {
 	}
 
 	srv := ssh.Server{
-		Addr: "[2a02:168:4a00:6a75::b06e:bf30:504b]:2222", // jump.build.zekjur.net:2222
+		Addr: "[2a02:168:4a00:6a75:6d9:f5ff:fe1f:9dcd]:2222", // jump.build.zekjur.net:2222
 		LocalPortForwardingCallback: func(ctx ssh.Context, host string, port uint32) bool {
 			allow := host == "build" && port == 22
 			log.Printf("[%v@%v] jump(%v:%v) = %v", ctx.User(), ctx.RemoteAddr(), host, port, allow)
@@ -52,7 +52,7 @@ func logic() error {
 		ChannelHandlers: map[string]ssh.ChannelHandler{
 			"direct-tcpip": func(srv *ssh.Server, conn *gossh.ServerConn, newChan gossh.NewChannel, sshctx ssh.Context) {
 				prefix := fmt.Sprintf("[%v@%v]", sshctx.User(), sshctx.RemoteAddr())
-				const buildMAC = "b0:6e:bf:30:50:4b"
+				const buildMAC = "04:d9:f5:1f:9d:cd"
 				log.Printf("%v waking up %s", prefix, buildMAC)
 				// TODO: can we inform the client via
 				// https://tools.ietf.org/html/rfc4253#section-11.3 about the
@@ -103,9 +103,9 @@ func configureListenAddress() error {
 		return err
 	}
 
-	const buildMAC = "b0:6e:bf:30:50:4b"
+	const buildMAC = "04:d9:f5:1f:9d:cd"
 	// jump → ju → j (0x6a) u (0x75)
-	addr, err := netlink.ParseAddr("2a02:168:4a00:6a75::b06e:bf30:504b/64")
+	addr, err := netlink.ParseAddr("2a02:168:4a00:6a75:6d9:f5ff:fe1f:9dcd/64")
 	if err != nil {
 		return err
 	}
