@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -122,7 +123,7 @@ func enableUnprivilegedPing() error {
 }
 
 func mustDropPrivileges() {
-	cmd := exec.Command(os.Args[0])
+	cmd := exec.Command(os.Args[0], os.Args[1:]...)
 	cmd.Env = append(os.Environ(), "WOLGW_PRIVILEGES_DROPPED=1")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -138,6 +139,8 @@ func mustDropPrivileges() {
 }
 
 func main() {
+	flag.Parse()
+
 	gokrazy.WaitForClock()
 
 	if os.Getenv("WOLGW_PRIVILEGES_DROPPED") != "1" {
