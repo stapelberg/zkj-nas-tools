@@ -60,21 +60,20 @@ func stateMachine(current State) State {
 	// if current.beastPowered {
 	// 	next.difmxChannel = 1 // beast
 	// }
-	// Cleaning is okay between 10:15 and 13:00 on work days
 	now := time.Now()
-	hour, minute := now.Hour(), now.Minute()
-	roombaCanClean := now.Weekday() != time.Saturday &&
-		now.Weekday() != time.Sunday &&
-		((hour == 10 && minute > 15) || hour == 11 || hour == 12) &&
-		!current.galaxyActive.Value()
-	// Override: don’t clean if someone is at home
-	if next.avrPowered.Value() {
-		roombaCanClean = false
-	}
-	next.roombaCanClean.Set(roombaCanClean)
-	next.avrPowered.Set(current.beastPowered ||
+	weekday, hour, minute := now.Weekday(), now.Hour(), now.Minute()
+	anyoneHome :=
 		current.midnaUnlocked.Value() ||
-		(hour > 8 && (current.galaxyActive.Value() || current.iphoneActive.Value())))
+			current.beastPowered ||
+			(hour > 8 && (current.galaxyActive.Value() || current.iphoneActive.Value()))
+	// Cleaning is okay between 10:15 and 13:00 on work days,
+	// unless anyone is home.
+	next.roombaCanClean.Set(
+		weekday != time.Saturday &&
+			weekday != time.Sunday &&
+			((hour == 10 && minute > 15) || hour == 11 || hour == 12) &&
+			!anyoneHome)
+	next.avrPowered.Set(anyoneHome)
 	return next
 }
 
