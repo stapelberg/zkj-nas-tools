@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239 // indirect
-	github.com/eclipse/paho.mqtt.golang v1.1.1
+	github.com/eclipse/paho.mqtt.golang v1.2.0
 	github.com/fearful-symmetry/garlic v0.3.0
 	github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568 // indirect
 	github.com/gliderlabs/ssh v0.2.2

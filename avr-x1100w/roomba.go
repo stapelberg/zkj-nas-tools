@@ -81,7 +81,7 @@ func schedule() error {
 		PingTimeout:     5 * time.Minute,
 		AutoReconnect:   true,
 		// TODO: can we verify the certificate?
-		TLSConfig: tls.Config{InsecureSkipVerify: true},
+		TLSConfig: &tls.Config{InsecureSkipVerify: true},
 		DefaultPublishHandler: func(cl mqtt.Client, msg mqtt.Message) {
 			//log.Printf("cl: %v, msg = %v", cl, msg)
 			log.Printf("topic %q, id %d, payload %s", msg.Topic(), msg.MessageID(), string(msg.Payload()))
