@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/fearful-symmetry/garlic"
 	"golang.org/x/sync/errgroup"
 )
@@ -28,6 +30,16 @@ var (
 	runStatus = "notrunning"
 	runMu     sync.RWMutex
 )
+
+var host = func() string {
+	host, err := os.Hostname()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return host
+}()
+
+var mqttClient mqtt.Client
 
 func listenNetlink() error {
 	// Only superuser is allowed to listen to multicast connector messages:
@@ -69,6 +81,18 @@ func listenNetlink() error {
 		}
 		if prev != runStatus {
 			log.Printf("  status change: prev=%v, now=%v", prev, runStatus)
+			{
+				jsonval := struct {
+					Running bool `json:"running"`
+				}{len(programPids) > 0}
+				b, err := json.Marshal(jsonval)
+				if err != nil {
+					log.Println(err)
+				} else {
+					mqttClient.Publish("runstatus/"+host+"/"+*programName, 0 /* qos */, true /* retained */, string(b))
+				}
+			}
+
 			prev = runStatus
 		}
 		runMu.Unlock()
@@ -104,6 +128,14 @@ func pollProc() error {
 
 func main() {
 	flag.Parse()
+
+	opts := mqtt.NewClientOptions().AddBroker("tcp://dr.lan:1883")
+	opts.SetClientID("runstatus-" + host)
+	mqttClient = mqtt.NewClient(opts)
+	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		// TODO: connect asynchronously in the background to avoid this hard dependency
+		log.Fatalf("MQTT connection failed: %v", token.Error())
+	}
 
 	var eg errgroup.Group
 	eg.Go(listenNetlink)
