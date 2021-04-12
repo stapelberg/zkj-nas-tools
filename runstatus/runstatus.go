@@ -41,6 +41,18 @@ var host = func() string {
 
 var mqttClient mqtt.Client
 
+func publishStatus(running bool) {
+	jsonval := struct {
+		Running bool `json:"running"`
+	}{running}
+	b, err := json.Marshal(jsonval)
+	if err != nil {
+		log.Println(err)
+	} else {
+		mqttClient.Publish("runstatus/"+host+"/"+*programName, 0 /* qos */, true /* retained */, string(b))
+	}
+}
+
 func listenNetlink() error {
 	// Only superuser is allowed to listen to multicast connector messages:
 	// https://github.com/torvalds/linux/blob/2c523b344dfa65a3738e7039832044aa133c75fb/net/netlink/af_netlink.c#L992
@@ -81,17 +93,7 @@ func listenNetlink() error {
 		}
 		if prev != runStatus {
 			log.Printf("  status change: prev=%v, now=%v", prev, runStatus)
-			{
-				jsonval := struct {
-					Running bool `json:"running"`
-				}{len(programPids) > 0}
-				b, err := json.Marshal(jsonval)
-				if err != nil {
-					log.Println(err)
-				} else {
-					mqttClient.Publish("runstatus/"+host+"/"+*programName, 0 /* qos */, true /* retained */, string(b))
-				}
-			}
+			publishStatus(len(programPids) > 0)
 
 			prev = runStatus
 		}
@@ -138,6 +140,8 @@ func main() {
 	}
 
 	var eg errgroup.Group
+	publishStatus(false)
+
 	eg.Go(listenNetlink)
 	// eg.Go(pollProc)
 
