@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -139,9 +140,10 @@ func main() {
 		log.Fatalf("MQTT connection failed: %v", token.Error())
 	}
 
-	var eg errgroup.Group
 	publishStatus(false)
 
+	ctx := context.Background()
+	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(listenNetlink)
 	// eg.Go(pollProc)
 
@@ -151,7 +153,21 @@ func main() {
 		runMu.RUnlock()
 		fmt.Fprintf(w, "%s", status)
 	})
-	eg.Go(func() error { return http.ListenAndServe(*listenAddress, nil) })
+	eg.Go(func() error {
+		srv := &http.Server{
+			Addr: *listenAddress,
+		}
+		serveErr := make(chan error)
+		go func() {
+			serveErr <- srv.ListenAndServe()
+		}()
+		select {
+		case <-ctx.Done():
+			return srv.Shutdown(ctx)
+		case err := <-serveErr:
+			return err
+		}
+	})
 	if err := eg.Wait(); err != nil {
 		log.Fatal(err)
 	}
