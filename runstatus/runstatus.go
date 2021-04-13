@@ -17,6 +17,8 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/fearful-symmetry/garlic"
 	"golang.org/x/sync/errgroup"
+
+	_ "net/http/pprof"
 )
 
 var (
@@ -28,7 +30,7 @@ var (
 		"i3lock",
 		"Name (as in /proc/<pid>/comm) of the program to monitor")
 
-	runStatus = "notrunning"
+	runStatus bool
 	runMu     sync.RWMutex
 )
 
@@ -64,7 +66,7 @@ func listenNetlink() error {
 	if err != nil {
 		return err
 	}
-	var prev string
+	var prev bool
 	programPids := make(map[uint32]bool)
 	for {
 		data, err := conn.ReadPCN()
@@ -87,15 +89,10 @@ func listenNetlink() error {
 			}
 		}
 		runMu.Lock()
-		if len(programPids) > 0 {
-			runStatus = "running"
-		} else {
-			runStatus = "notrunning"
-		}
+		runStatus = len(programPids) > 0
 		if prev != runStatus {
 			log.Printf("  status change: prev=%v, now=%v", prev, runStatus)
-			publishStatus(len(programPids) > 0)
-
+			publishStatus(runStatus)
 			prev = runStatus
 		}
 		runMu.Unlock()
@@ -104,14 +101,14 @@ func listenNetlink() error {
 
 func pollProc() error {
 	for {
-		status := "notrunning"
+		var status bool
 		filepath.Walk("/proc", func(path string, info os.FileInfo, err error) error {
 			if path == "/proc" {
 				return nil
 			}
 			if b, err := ioutil.ReadFile(filepath.Join(path, "comm")); err == nil {
 				if strings.TrimSpace(string(b)) == *programName {
-					status = "running"
+					status = true
 				}
 			}
 
@@ -133,14 +130,18 @@ func main() {
 	flag.Parse()
 
 	opts := mqtt.NewClientOptions().AddBroker("tcp://dr.lan:1883")
-	opts.SetClientID("runstatus-" + host)
+	opts = opts.SetClientID("runstatus-" + host)
+	opts = opts.SetOnConnectHandler(func(mqtt.Client) {
+		runMu.RLock()
+		defer runMu.RUnlock()
+		log.Printf("(re)connected, publishing status: %v", runStatus)
+		publishStatus(runStatus)
+	})
 	mqttClient = mqtt.NewClient(opts)
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
 		// TODO: connect asynchronously in the background to avoid this hard dependency
 		log.Fatalf("MQTT connection failed: %v", token.Error())
 	}
-
-	publishStatus(false)
 
 	ctx := context.Background()
 	eg, ctx := errgroup.WithContext(ctx)
@@ -151,7 +152,11 @@ func main() {
 		runMu.RLock()
 		status := runStatus
 		runMu.RUnlock()
-		fmt.Fprintf(w, "%s", status)
+		if status {
+			fmt.Fprintf(w, "running")
+		} else {
+			fmt.Fprintf(w, "notrunning")
+		}
 	})
 	eg.Go(func() error {
 		srv := &http.Server{
