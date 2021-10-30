@@ -6,8 +6,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gokrazy/gokrazy"
@@ -57,36 +60,52 @@ func main() {
 	http.Handle("/metrics", promhttp.Handler())
 	go http.ListenAndServe(*listen, nil)
 
-	// Run forever, trigger a run at 10:00 each Monday through Friday.
-	for {
-		now := time.Now()
-		runToday := now.Hour() < 10 &&
-			now.Weekday() != time.Saturday &&
-			now.Weekday() != time.Sunday
-		today := now.Day()
-		log.Printf("now = %v, runToday = %v", now, runToday)
+	runCh := make(chan struct{})
+	go func() {
+		// Run forever, trigger a run at 10:00 each Monday through Friday.
 		for {
-			if time.Now().Day() != today {
-				// Day changed, re-evaluate whether to run today.
-				break
-			}
-
-			nextHour := time.Now().Truncate(time.Hour).Add(1 * time.Hour)
-			log.Printf("today = %d, runToday = %v, next hour: %v", today, runToday, nextHour)
-			time.Sleep(time.Until(nextHour))
-
-			if time.Now().Hour() >= 10 && runToday {
-				runToday = false
-				log.Println("Running dornröschen")
-				if err := run(); err != nil {
-					log.Printf("failed: %v", err)
+			now := time.Now()
+			runToday := now.Hour() < 10 &&
+				now.Weekday() != time.Saturday &&
+				now.Weekday() != time.Sunday
+			today := now.Day()
+			log.Printf("now = %v, runToday = %v", now, runToday)
+			for {
+				if time.Now().Day() != today {
+					// Day changed, re-evaluate whether to run today.
+					break
 				}
-				unix := time.Now().Unix()
-				lastSuccess.Set(float64(unix))
-				if err := ioutil.WriteFile(*lastSuccessPath, []byte(fmt.Sprintf("%d", unix)), 0600); err != nil {
-					log.Printf("could not persist last success timestamp to disk: %v", err)
+
+				nextHour := time.Now().Truncate(time.Hour).Add(1 * time.Hour)
+				log.Printf("today = %d, runToday = %v, next hour: %v", today, runToday, nextHour)
+				time.Sleep(time.Until(nextHour))
+
+				if time.Now().Hour() >= 10 && runToday {
+					runToday = false
+					runCh <- struct{}{}
 				}
 			}
 		}
+	}()
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGUSR1)
+		for range c {
+			log.Printf("received SIGUSR1, starting run")
+			runCh <- struct{}{}
+		}
+	}()
+
+	for range runCh {
+		log.Println("Running dornröschen")
+		if err := run(); err != nil {
+			log.Printf("failed: %v", err)
+		}
+		unix := time.Now().Unix()
+		lastSuccess.Set(float64(unix))
+		if err := ioutil.WriteFile(*lastSuccessPath, []byte(fmt.Sprintf("%d", unix)), 0600); err != nil {
+			log.Printf("could not persist last success timestamp to disk: %v", err)
+		}
+
 	}
 }
