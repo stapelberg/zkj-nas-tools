@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"crypto"
 	"crypto/rsa"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"os"
 
+	"github.com/stapelberg/rsyncprom"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -62,28 +65,76 @@ func newSshConnection(host, keypath string) (*ssh.Client, error) {
 	return client, nil
 }
 
+func newLogWriter(logger *log.Logger) io.Writer {
+	r, w := io.Pipe()
+	scanner := bufio.NewScanner(r)
+	go func() {
+		for scanner.Scan() {
+			logger.Printf("> %s", scanner.Text())
+		}
+		if err := scanner.Err(); err != nil && err != io.EOF {
+			log.Print(err)
+		}
+	}()
+	return w
+}
+
 func sshCommand(host, keypath, command string) (string, error) {
-	conn, err := newSshConnection(host, keypath)
+	logFile, err := os.CreateTemp("", "dornröschen-ssh-*.log")
 	if err != nil {
 		return "", err
 	}
-	session, err := conn.NewSession()
-	if err != nil {
-		return "", err
+	defer logFile.Close()
+	exitCode := make(chan int, 1)
+	var session *ssh.Session
+	defer func() {
+		if session != nil {
+			session.Close()
+		}
+	}()
+	logger := log.New(logFile, "", log.LstdFlags)
+	start := func(context.Context, []string) (io.Reader, error) {
+		logger.Printf("ssh(%s)", host)
+		conn, err := newSshConnection(host, keypath)
+		if err != nil {
+			return nil, err
+		}
+		session, err = conn.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			return nil, err
+		}
+
+		session.Stdout = io.MultiWriter(pw, newLogWriter(logger))
+		session.Stderr = newLogWriter(logger)
+		logger.Printf("(*ssh.Session).Start(%q)", command)
+		if err := session.Start(command); err != nil {
+			return nil, err
+		}
+
+		go func() {
+			defer pw.Close()
+			if err := session.Wait(); err != nil {
+				logger.Printf("(*ssh.Session).Wait() = %v", err)
+				exitCode <- 1
+				return
+			}
+			exitCode <- 0
+		}()
+
+		return pr, nil
 	}
-	defer session.Close()
-	if command == "" {
-		return "", session.Start(command)
+	wait := func() int {
+		return <-exitCode
 	}
-	f, err := ioutil.TempFile("", "dornröschen-")
-	if err != nil {
-		return "", err
+	ctx := context.Background()
+	params := rsyncprom.WrapParams{
+		Pushgateway: "https://pushgateway.ts.zekjur.net",
+		Instance:    "dr@" + host,
+		Job:         "rsync",
 	}
-	defer f.Close()
-	session.Stdout = f
-	session.Stderr = f
-	if err := session.Run(command); err != nil {
-		return f.Name(), fmt.Errorf("Could not execute SSH command %q, please see %q", command, f.Name())
-	}
-	return f.Name(), nil
+	return logFile.Name(), rsyncprom.WrapRsync(ctx, &params, nil, start, wait)
 }
