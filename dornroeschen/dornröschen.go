@@ -29,7 +29,7 @@ var (
 		"10.0.0.252/d0:50:99:9a:0f:4a,10.0.0.253/70:85:c2:b6:02:24",
 		"Comma-separated list of NASen, each entry is host/mac-address")
 	backupPrivateKeyPath = flag.String("ssh_backup_private_key_path",
-		"/perm/id_rsa_backup",
+		"/perm/id_ed25519_backup",
 		"Path to the SSH private key file to authenticate with at -backup_hosts for backing up")
 	suspendPrivateKeyPath = flag.String("ssh_suspend_private_key_path",
 		"/perm/id_rsa_suspend",
