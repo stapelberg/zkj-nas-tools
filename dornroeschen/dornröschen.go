@@ -147,19 +147,15 @@ func backup(NASen []string) {
 		// interprets the command as the destination host.
 		outputfile, err := sshCommand(sourceHost, *backupPrivateKeyPath, destHost)
 		// Dump the output into the log, which is persisted via remote syslog:
-		logPrinted := false
 		if b, err := ioutil.ReadFile(outputfile); err == nil {
 			log.Printf("[%s] SSH output", sourceHost)
 			for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
 				log.Printf("[%s]   %s", sourceHost, line)
 			}
 			log.Printf("[%s] End of SSH output", sourceHost)
-			logPrinted = true
 		}
 		if err != nil {
-			if !logPrinted {
-				log.Printf("Backup of %s failed: %v\n", sourceHost, err)
-			}
+			log.Printf("Backup of %s failed: %v\n", sourceHost, err)
 			continue
 		}
 
