@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/stapelberg/rsyncprom"
 	"golang.org/x/crypto/ssh"
@@ -142,6 +143,15 @@ func sshCommand(host, keypath, command string) (string, error) {
 			defer pw.Close()
 			if err := session.Wait(); err != nil {
 				logger.Printf("(*ssh.Session).Wait() = %v", err)
+				if strings.Contains(err.Error(), "exited with status 24") {
+					// rsync exits with status code 24 when a file or directory
+					// vanishes between listing and transferring it. this can be
+					// expected when doing a full backup while working with
+					// docker containers, for example, so treat an exit status
+					// code 24 as not-an-error:
+					exitCode <- 0
+					return
+				}
 				exitCode <- 1
 				return
 			}
