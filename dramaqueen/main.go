@@ -103,6 +103,8 @@ func checkShutdown() {
 // Runs infinitely as a goroutine, periodically pinging samba users.
 func pingUsers() {
 	if *netCommand == "" {
+		statusLock.Lock()
+		defer statusLock.Unlock()
 		reachableUsers = false
 		return
 	}
