@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -11,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stapelberg/zkj-nas-tools/internal/wake"
 	"github.com/stapelberg/zkj-nas-tools/internal/wakeonlan"
-	"github.com/stapelberg/zkj-nas-tools/ping"
 )
 
 var (
@@ -33,11 +34,15 @@ var (
 		"/perm/id_ed25519_backup",
 		"Path to the SSH private key file to authenticate with at -backup_hosts for backing up")
 	suspendPrivateKeyPath = flag.String("ssh_suspend_private_key_path",
-		"/perm/id_rsa_suspend",
+		"/perm/id_ed25519_suspend",
 		"Path to the SSH private key file to authenticate with at -backup_hosts for suspending to RAM")
 	syncPrivateKeyPath = flag.String("ssh_sync_private_key_path",
 		"/perm/id_rsa_sync",
 		"Path to the SSH private key file to authenticate with at -storage_hosts for syncing")
+
+	mqttBroker = flag.String("mqtt_broker",
+		"tcp://dr.lan:1883",
+		"MQTT broker address for github.com/eclipse/paho.mqtt.golang")
 )
 
 func splitHostMAC(hostmac string) (host, mac string) {
@@ -48,33 +53,42 @@ func splitHostMAC(hostmac string) (host, mac string) {
 	return parts[0], parts[1]
 }
 
-func wakeUp(host, mac string) (bool, error) {
-	result := make(chan *time.Duration)
-	go ping.Ping(host, 5*time.Second, result)
-	if <-result != nil {
-		log.Printf("Host %s responding to pings, not waking up.\n", host)
-		return false, nil
-	}
+func wakeUp(host, mac string) (woken bool, _ error) {
+	ctx := context.Background()
 
-	// Parse MAC address
-	if err := wakeonlan.SendMagicPacket(nil, mac); err != nil {
-		log.Printf("sendWOL: %v", err)
-	} else {
-		log.Printf("Sent magic packet to %v", mac)
-	}
-
-	timeout := 120 * time.Second
-	packetSent := time.Now()
-	for time.Since(packetSent) < timeout {
-		go ping.Ping(host, 1*time.Second, result)
-		if <-result != nil {
-			log.Printf("Host %s woke up after waiting %v.\n", host, time.Since(packetSent))
-			return true, nil
+	{
+		ctx, canc := context.WithTimeout(ctx, 1*time.Minute)
+		defer canc()
+		if err := wake.PollSSH1(ctx, host+":22"); err != nil {
+			return false, err
 		}
-		time.Sleep(500 * time.Millisecond)
 	}
 
-	return true, fmt.Errorf("Host %s not responding to pings within %v after sending magic packet", host, timeout)
+	if host == "10.0.0.252" {
+		// push the mainboard power button to turn off the PC part (ESP32 will
+		// keep running on USB +5V standby power).
+		log.Printf("pushing storage2 mainboard power button")
+		const clientID = "https://github.com/stapelberg/zkj-nas-tools/dornroeschen"
+		if err := wake.PushMainboardPower(*mqttBroker, clientID); err != nil {
+			log.Printf("pushing storage2 mainboard power button failed: %v", err)
+		}
+	} else {
+		if err := wakeonlan.SendMagicPacket(nil, mac); err != nil {
+			log.Printf("sendWOL: %v", err)
+		} else {
+			log.Printf("Sent magic packet to %v", mac)
+		}
+	}
+
+	{
+		ctx, canc := context.WithTimeout(ctx, 5*time.Minute)
+		defer canc()
+		if err := wake.PollSSH(ctx, host+":22"); err != nil {
+			return true, err
+		}
+	}
+
+	return true, nil
 }
 
 func dramaqueenRequest(NAS, lock, method string) error {
