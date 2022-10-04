@@ -59,8 +59,8 @@ func wakeUp(host, mac string) (woken bool, _ error) {
 	{
 		ctx, canc := context.WithTimeout(ctx, 1*time.Minute)
 		defer canc()
-		if err := wake.PollSSH1(ctx, host+":22"); err != nil {
-			return false, err
+		if err := wake.PollSSH1(ctx, host+":22"); err == nil {
+			return false, nil // already up and running
 		}
 	}
 
@@ -87,6 +87,8 @@ func wakeUp(host, mac string) (woken bool, _ error) {
 			return true, err
 		}
 	}
+
+	log.Printf("NAS %s now reachable via SSH", host)
 
 	return true, nil
 }
@@ -130,7 +132,7 @@ func backup(NASen []string) {
 	destHost, destMAC := splitHostMAC(dest)
 
 	if _, err := wakeUp(destHost, destMAC); err != nil {
-		log.Fatalf("Could not wake up NAS %s\n", destHost)
+		log.Fatalf("Could not wake up NAS %s: %v", destHost, err)
 	}
 
 	time.Sleep(10 * time.Second) // to finish boot
@@ -152,7 +154,7 @@ func backup(NASen []string) {
 			var err error
 			woken, err = wakeUp(sourceHost, sourceMAC)
 			if err != nil {
-				log.Printf("Backup of %s failed: %v\n", sourceHost, err)
+				log.Printf("Backup of %s failed: %v", sourceHost, err)
 				continue
 			}
 		}
@@ -180,7 +182,7 @@ func backup(NASen []string) {
 		}
 
 		if _, err := sshCommand(sourceHost, *suspendPrivateKeyPath, ""); err != nil {
-			log.Printf("Suspending %s to RAM failed: %v\n", sourceHost, err)
+			log.Printf("Suspending %s to RAM failed: %v", sourceHost, err)
 		}
 	}
 }
@@ -198,13 +200,13 @@ func sync(NASen []string) {
 		dest := NASen[(idx+1)%len(NASen)]
 		sourceHost, _ := splitHostMAC(source)
 		destHost, _ := splitHostMAC(dest)
-		log.Printf("Syncing %s to %s\n", sourceHost, destHost)
+		log.Printf("Syncing %s to %s", sourceHost, destHost)
 
 		outputfile, err := sshCommand(sourceHost, *syncPrivateKeyPath, destHost)
 		if err != nil {
-			log.Printf("Syncing of %s to %s failed: %v\n", sourceHost, destHost, err)
+			log.Printf("Syncing of %s to %s failed: %v", sourceHost, destHost, err)
 		}
-		log.Printf("sync %s to %s output stored in %s\n", sourceHost, destHost, outputfile)
+		log.Printf("sync %s to %s output stored in %s", sourceHost, destHost, outputfile)
 	}
 
 	for _, dest := range NASen {
