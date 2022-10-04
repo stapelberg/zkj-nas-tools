@@ -111,6 +111,7 @@ func dramaqueenRequest(NAS, lock, method string) error {
 		if resp.StatusCode != 200 {
 			return fmt.Errorf(`dramaqueen request on %s resulted in HTTP %d`, NAS, resp.StatusCode)
 		}
+		log.Printf("dramaqueen lock request succeeded: lock=%s method=%s", lock, method)
 		break
 	}
 	return nil
