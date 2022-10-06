@@ -132,7 +132,8 @@ func backup(NASen []string) {
 	log.Printf("Backup destination is %s", dest)
 	destHost, destMAC := splitHostMAC(dest)
 
-	if _, err := wakeUp(destHost, destMAC); err != nil {
+	wokenNAS, err := wakeUp(destHost, destMAC)
+	if err != nil {
 		log.Fatalf("Could not wake up NAS %s: %v", destHost, err)
 	}
 
@@ -184,6 +185,13 @@ func backup(NASen []string) {
 
 		if _, err := sshCommand(sourceHost, *suspendPrivateKeyPath, ""); err != nil {
 			log.Printf("Suspending %s to RAM failed: %v", sourceHost, err)
+		}
+	}
+
+	if wokenNAS {
+		log.Printf("suspending NAS %s", destHost)
+		if _, err := sshCommand(destHost, *suspendPrivateKeyPath, ""); err != nil {
+			log.Printf("Suspending %s failed: %v", destHost, err)
 		}
 	}
 }
