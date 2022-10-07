@@ -126,9 +126,7 @@ func releaseDramaqueenLock(NAS, lock string) error {
 	return dramaqueenRequest(NAS, lock, "release")
 }
 
-func backup(NASen []string) {
-	// Alternate between the available NASen to make sure each one works.
-	dest := NASen[(time.Now().Day()+1)%len(NASen)]
+func backup(dest string) bool {
 	log.Printf("Backup destination is %s", dest)
 	destHost, destMAC := splitHostMAC(dest)
 
@@ -188,19 +186,25 @@ func backup(NASen []string) {
 		}
 	}
 
-	if wokenNAS {
-		log.Printf("suspending NAS %s", destHost)
-		if _, err := sshCommand(destHost, *suspendPrivateKeyPath, ""); err != nil {
-			log.Printf("Suspending %s failed: %v", destHost, err)
-		}
+	return wokenNAS
+}
+
+func suspendNAS(destHost string) {
+	log.Printf("suspending NAS %s", destHost)
+	if _, err := sshCommand(destHost, *suspendPrivateKeyPath, ""); err != nil {
+		log.Printf("Suspending %s failed: %v", destHost, err)
 	}
 }
 
 func sync(NASen []string) {
 	for _, dest := range NASen {
 		destHost, destMAC := splitHostMAC(dest)
-		if _, err := wakeUp(destHost, destMAC); err != nil {
+		woken, err := wakeUp(destHost, destMAC)
+		if err != nil {
 			log.Fatalf("Could not wake up NAS %s\n", destHost)
+		}
+		if woken {
+			defer suspendNAS(destHost)
 		}
 		lockDramaqueen(destHost, "sync")
 	}
@@ -236,12 +240,21 @@ func run() error {
 		return fmt.Errorf("More than 2 -storage_hosts are not supported. Please send a patch to fix.")
 	}
 
+	// Alternate between the available NASen to make sure each one works.
+	dest := storageList[(time.Now().Day()+1)%len(storageList)]
+
+	wokenNAS := false
 	if *runBackup {
-		backup(storageList)
+		wokenNAS = backup(dest)
 	}
 
 	if *runSync {
 		sync(storageList)
+	}
+
+	if wokenNAS {
+		destHost, _ := splitHostMAC(dest)
+		suspendNAS(destHost)
 	}
 
 	return nil
