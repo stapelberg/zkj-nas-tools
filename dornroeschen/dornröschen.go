@@ -162,7 +162,7 @@ func backup(dest string) bool {
 		// The command is just destHost, because for the SSH key this program
 		// is using, the remote host will only ever run /root/backup.pl, which
 		// interprets the command as the destination host.
-		outputfile, err := sshCommand(sourceHost, *backupPrivateKeyPath, destHost)
+		outputfile, err := rsyncSSH(sourceHost, *backupPrivateKeyPath, destHost)
 		// Dump the output into the log, which is persisted via remote syslog:
 		if b, err := ioutil.ReadFile(outputfile); err == nil {
 			log.Printf("[%s] SSH output", sourceHost)
@@ -181,9 +181,7 @@ func backup(dest string) bool {
 			continue
 		}
 
-		if _, err := sshCommand(sourceHost, *suspendPrivateKeyPath, ""); err != nil {
-			log.Printf("Suspending %s to RAM failed: %v", sourceHost, err)
-		}
+		suspendNAS(sourceHost)
 	}
 
 	return wokenNAS
@@ -191,7 +189,7 @@ func backup(dest string) bool {
 
 func suspendNAS(destHost string) {
 	log.Printf("suspending NAS %s", destHost)
-	if _, err := sshCommand(destHost, *suspendPrivateKeyPath, ""); err != nil {
+	if err := sshCommand(log.Default(), destHost, *suspendPrivateKeyPath, ""); err != nil {
 		log.Printf("Suspending %s failed: %v", destHost, err)
 	}
 }
@@ -215,7 +213,7 @@ func sync(NASen []string) {
 		destHost, _ := splitHostMAC(dest)
 		log.Printf("Syncing %s to %s", sourceHost, destHost)
 
-		outputfile, err := sshCommand(sourceHost, *syncPrivateKeyPath, destHost)
+		outputfile, err := rsyncSSH(sourceHost, *syncPrivateKeyPath, destHost)
 		if err != nil {
 			log.Printf("Syncing of %s to %s failed: %v", sourceHost, destHost, err)
 		}

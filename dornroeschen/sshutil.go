@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/rsa"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -103,66 +104,71 @@ func newLogWriter(logger *log.Logger) io.Writer {
 	return w
 }
 
-func sshCommand(host, keypath, command string) (string, error) {
+func sshCommandFor(logger *log.Logger, session *ssh.Session, host, keypath, command string) (start func(context.Context, []string) (io.Reader, error), wait func() int) {
+	exitCode := make(chan int, 1)
+	return func(context.Context, []string) (io.Reader, error) {
+			logger.Printf("ssh(%s)", host)
+			conn, err := newSshConnection(host, keypath)
+			if err != nil {
+				return nil, err
+			}
+			session, err = conn.NewSession()
+			if err != nil {
+				return nil, err
+			}
+			pr, pw, err := os.Pipe()
+			if err != nil {
+				return nil, err
+			}
+
+			session.Stdout = io.MultiWriter(pw, newLogWriter(logger))
+			session.Stderr = newLogWriter(logger)
+			logger.Printf("(*ssh.Session).Start(%q)", command)
+			if err := session.Start(command); err != nil {
+				return nil, err
+			}
+
+			go func() {
+				defer pw.Close()
+				if err := session.Wait(); err != nil {
+					logger.Printf("(*ssh.Session).Wait() = %v", err)
+					if strings.Contains(err.Error(), "exited with status 24") {
+						// rsync exits with status code 24 when a file or directory
+						// vanishes between listing and transferring it. this can be
+						// expected when doing a full backup while working with
+						// docker containers, for example, so treat an exit status
+						// code 24 as not-an-error:
+						exitCode <- 0
+						return
+					}
+					exitCode <- 1
+					return
+				}
+				exitCode <- 0
+			}()
+
+			return pr, nil
+		}, func() int {
+			return <-exitCode
+		}
+}
+
+func rsyncSSH(host, keypath, command string) (string, error) {
 	logFile, err := os.CreateTemp("", "dornröschen-ssh-*.log")
 	if err != nil {
 		return "", err
 	}
 	defer logFile.Close()
-	exitCode := make(chan int, 1)
+	logger := log.New(logFile, "", log.LstdFlags)
+
 	var session *ssh.Session
 	defer func() {
 		if session != nil {
 			session.Close()
 		}
 	}()
-	logger := log.New(logFile, "", log.LstdFlags)
-	start := func(context.Context, []string) (io.Reader, error) {
-		logger.Printf("ssh(%s)", host)
-		conn, err := newSshConnection(host, keypath)
-		if err != nil {
-			return nil, err
-		}
-		session, err = conn.NewSession()
-		if err != nil {
-			return nil, err
-		}
-		pr, pw, err := os.Pipe()
-		if err != nil {
-			return nil, err
-		}
+	start, wait := sshCommandFor(logger, session, host, keypath, command)
 
-		session.Stdout = io.MultiWriter(pw, newLogWriter(logger))
-		session.Stderr = newLogWriter(logger)
-		logger.Printf("(*ssh.Session).Start(%q)", command)
-		if err := session.Start(command); err != nil {
-			return nil, err
-		}
-
-		go func() {
-			defer pw.Close()
-			if err := session.Wait(); err != nil {
-				logger.Printf("(*ssh.Session).Wait() = %v", err)
-				if strings.Contains(err.Error(), "exited with status 24") {
-					// rsync exits with status code 24 when a file or directory
-					// vanishes between listing and transferring it. this can be
-					// expected when doing a full backup while working with
-					// docker containers, for example, so treat an exit status
-					// code 24 as not-an-error:
-					exitCode <- 0
-					return
-				}
-				exitCode <- 1
-				return
-			}
-			exitCode <- 0
-		}()
-
-		return pr, nil
-	}
-	wait := func() int {
-		return <-exitCode
-	}
 	ctx := context.Background()
 	params := rsyncprom.WrapParams{
 		Pushgateway: "https://pushgateway.ts.zekjur.net",
@@ -170,4 +176,24 @@ func sshCommand(host, keypath, command string) (string, error) {
 		Job:         "rsync",
 	}
 	return logFile.Name(), rsyncprom.WrapRsync(ctx, &params, nil, start, wait)
+}
+
+func sshCommand(logger *log.Logger, host, keypath, command string) error {
+	var session *ssh.Session
+	defer func() {
+		if session != nil {
+			session.Close()
+		}
+	}()
+	start, wait := sshCommandFor(logger, session, host, keypath, command)
+
+	rd, err := start(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	go io.Copy(ioutil.Discard, rd)
+	if exitCode := wait(); exitCode != 0 {
+		return fmt.Errorf("exit code %d", exitCode)
+	}
+	return nil
 }
