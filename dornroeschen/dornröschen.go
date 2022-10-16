@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -126,6 +127,52 @@ func releaseDramaqueenLock(NAS, lock string) error {
 	return dramaqueenRequest(NAS, lock, "release")
 }
 
+func backup1(destHost, sourceHost, sourceMAC string) error {
+	log := log.New(os.Stderr, sourceHost+" ", log.LstdFlags)
+
+	// Prevent dramaqueen on the destination NAS from shutting it down. If
+	// the dramaqueen lock cannot be acquired, just continue and hope for
+	// the best (in case a NAS is not running dramaqueen, it won’t shut
+	// down automatically anyway).
+	lockname := "backup-" + sourceHost
+	if err := lockDramaqueen(destHost, lockname); err == nil {
+		defer releaseDramaqueenLock(destHost, lockname)
+	}
+
+	woken := false
+	if sourceMAC != "" {
+		var err error
+		woken, err = wakeUp(sourceHost, sourceMAC)
+		if err != nil {
+			return fmt.Errorf("backup of %s failed: %v", sourceHost, err)
+		}
+	}
+
+	// The command is just destHost, because for the SSH key this program
+	// is using, the remote host will only ever run /root/backup.pl, which
+	// interprets the command as the destination host.
+	outputfile, err := rsyncSSH(sourceHost, *backupPrivateKeyPath, destHost)
+	// Dump the output into the log, which is persisted via remote syslog:
+	if b, err := ioutil.ReadFile(outputfile); err == nil {
+		log.Println("SSH output")
+		for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+			log.Println("   " + line)
+		}
+		log.Println("End of SSH output")
+	}
+	if err != nil {
+		return fmt.Errorf("backup of %s failed: %v\n", sourceHost, err)
+	}
+
+	// Suspend the machine to RAM, but only if we have woken it up.
+	if !woken {
+		return nil
+	}
+
+	suspendNAS(sourceHost)
+	return nil
+}
+
 func backup(dest string) bool {
 	log.Printf("Backup destination is %s", dest)
 	destHost, destMAC := splitHostMAC(dest)
@@ -135,53 +182,15 @@ func backup(dest string) bool {
 		log.Fatalf("Could not wake up NAS %s: %v", destHost, err)
 	}
 
-	time.Sleep(10 * time.Second) // to finish boot
+	// TODO: poll for /srv being mounted
+	time.Sleep(60 * time.Second)
 
 	for _, source := range strings.Split(*backupHosts, ",") {
 		sourceHost, sourceMAC := splitHostMAC(source)
-
-		// Prevent dramaqueen on the destination NAS from shutting it down. If
-		// the dramaqueen lock cannot be acquired, just continue and hope for
-		// the best (in case a NAS is not running dramaqueen, it won’t shut
-		// down automatically anyway).
-		lockname := "backup-" + sourceHost
-		if err := lockDramaqueen(destHost, lockname); err == nil {
-			defer releaseDramaqueenLock(destHost, lockname)
-		}
-
-		woken := false
-		if sourceMAC != "" {
-			var err error
-			woken, err = wakeUp(sourceHost, sourceMAC)
-			if err != nil {
-				log.Printf("Backup of %s failed: %v", sourceHost, err)
-				continue
-			}
-		}
-
-		// The command is just destHost, because for the SSH key this program
-		// is using, the remote host will only ever run /root/backup.pl, which
-		// interprets the command as the destination host.
-		outputfile, err := rsyncSSH(sourceHost, *backupPrivateKeyPath, destHost)
-		// Dump the output into the log, which is persisted via remote syslog:
-		if b, err := ioutil.ReadFile(outputfile); err == nil {
-			log.Printf("[%s] SSH output", sourceHost)
-			for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-				log.Printf("[%s]   %s", sourceHost, line)
-			}
-			log.Printf("[%s] End of SSH output", sourceHost)
-		}
-		if err != nil {
-			log.Printf("Backup of %s failed: %v\n", sourceHost, err)
+		if err := backup1(destHost, sourceHost, sourceMAC); err != nil {
+			log.Print(err)
 			continue
 		}
-
-		// Suspend the machine to RAM, but only if we have woken it up.
-		if !woken {
-			continue
-		}
-
-		suspendNAS(sourceHost)
 	}
 
 	return wokenNAS
