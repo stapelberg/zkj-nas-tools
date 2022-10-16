@@ -15,6 +15,7 @@ import (
 
 	"github.com/stapelberg/zkj-nas-tools/internal/wake"
 	"github.com/stapelberg/zkj-nas-tools/internal/wakeonlan"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -185,12 +186,20 @@ func backup(dest string) bool {
 	// TODO: poll for /srv being mounted
 	time.Sleep(60 * time.Second)
 
+	// Run all backups in parallel
+	var eg errgroup.Group
 	for _, source := range strings.Split(*backupHosts, ",") {
 		sourceHost, sourceMAC := splitHostMAC(source)
-		if err := backup1(destHost, sourceHost, sourceMAC); err != nil {
-			log.Print(err)
-			continue
-		}
+		eg.Go(func() error {
+			if err := backup1(destHost, sourceHost, sourceMAC); err != nil {
+				log.Print(err)
+			}
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		log.Print(err)
 	}
 
 	return wokenNAS
