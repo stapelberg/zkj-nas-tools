@@ -17,7 +17,8 @@ func wakeUp(mqttBroker, host, ip, mac string) error {
 		log.Printf("checking if tcp/22 (ssh) is available on %s", host)
 		ctx, canc := context.WithTimeout(ctx, 5*time.Second)
 		defer canc()
-		if err := wake.PollSSH1(ctx, host+":22"); err == nil {
+		if err := wake.PollSSH1(ctx, ip+":22"); err == nil {
+			log.Printf("SSH already up and running")
 			return nil // already up and running
 		}
 	}
@@ -31,6 +32,7 @@ func wakeUp(mqttBroker, host, ip, mac string) error {
 			log.Printf("pushing storage2 mainboard power button failed: %v", err)
 		}
 	} else {
+		log.Printf("Sending magic packet to %v", mac)
 		if err := wakeonlan.SendMagicPacket(nil, mac); err != nil {
 			log.Printf("sendWOL: %v", err)
 		} else {
