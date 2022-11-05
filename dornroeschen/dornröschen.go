@@ -166,7 +166,9 @@ func backup1(destHost, sourceHost, sourceMAC string) error {
 	}
 
 	// Suspend the machine to RAM, but only if we have woken it up.
-	if !woken {
+	// midna suspends if pacna is running.
+	suspend := woken || sourceHost == "midna"
+	if !suspend {
 		return nil
 	}
 
