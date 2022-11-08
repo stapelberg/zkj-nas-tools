@@ -4,8 +4,10 @@ import (
 	"context"
 	"flag"
 	"log"
+	"net"
 	"time"
 
+	"github.com/gokrazy/gokrazy"
 	"github.com/stapelberg/zkj-nas-tools/internal/wake"
 	"github.com/stapelberg/zkj-nas-tools/internal/wakeonlan"
 )
@@ -33,7 +35,22 @@ func wakeUp(mqttBroker, host, ip, mac string) error {
 		}
 	} else {
 		log.Printf("Sending magic packet to %v", mac)
-		if err := wakeonlan.SendMagicPacket(nil, mac); err != nil {
+		ips, err := gokrazy.PrivateInterfaceAddrs()
+		if err != nil {
+			return err
+		}
+		var laddr *net.UDPAddr
+		_, lan, err := net.ParseCIDR("10.0.0.0/8")
+		if err != nil {
+			return err
+		}
+		for _, ipstr := range ips {
+			if ip := net.ParseIP(ipstr); lan.Contains(ip) {
+				laddr = &net.UDPAddr{IP: ip}
+				break
+			}
+		}
+		if err := wakeonlan.SendMagicPacket(laddr, mac); err != nil {
 			log.Printf("sendWOL: %v", err)
 		} else {
 			log.Printf("Sent magic packet to %v", mac)
