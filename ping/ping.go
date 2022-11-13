@@ -327,7 +327,7 @@ func PingContext(ctx context.Context, addr string) (time.Duration, error) {
 		b = ipv4Payload(b)
 
 		if m, err = parseICMPMessage(b); err != nil {
-			return 0, fmt.Errorf("parseICMPMessage: %v", addr, err)
+			return 0, fmt.Errorf("parseICMPMessage: %v", err)
 		}
 		switch p := m.Body.(type) {
 		case *icmpEcho:
