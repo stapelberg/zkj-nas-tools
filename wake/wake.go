@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/gokrazy/gokrazy"
+	"github.com/gokrazy/gokrazy/ifaddr"
 	"github.com/stapelberg/zkj-nas-tools/internal/wake"
 	"github.com/stapelberg/zkj-nas-tools/internal/wakeonlan"
 )
@@ -35,7 +35,7 @@ func wakeUp(mqttBroker, host, ip, mac string) error {
 		}
 	} else {
 		log.Printf("Sending magic packet to %v", mac)
-		ips, err := gokrazy.PrivateInterfaceAddrs()
+		ips, err := ifaddr.PrivateInterfaceAddrs()
 		if err != nil {
 			return err
 		}
