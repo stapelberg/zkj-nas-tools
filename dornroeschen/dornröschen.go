@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/stapelberg/zkj-nas-tools/internal/wake"
-	"github.com/stapelberg/zkj-nas-tools/internal/wakeonlan"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -56,43 +55,21 @@ func splitHostMAC(hostmac string) (host, mac string) {
 }
 
 func wakeUp(host, mac string) (woken bool, _ error) {
-	ctx := context.Background()
-
-	{
-		ctx, canc := context.WithTimeout(ctx, 1*time.Minute)
-		defer canc()
-		if err := wake.PollSSH1(ctx, host+":22"); err == nil {
-			return false, nil // already up and running
-		}
+	cfg := wake.Config{
+		MQTTBroker: *mqttBroker,
+		ClientID:   "https://github.com/stapelberg/zkj-nas-tools/dornroeschen",
+		Host:       host,
+		IP:         host,
+		MAC:        mac,
 	}
-
-	if host == "10.0.0.252" {
-		// push the mainboard power button to turn off the PC part (ESP32 will
-		// keep running on USB +5V standby power).
-		log.Printf("pushing storage2 mainboard power button")
-		const clientID = "https://github.com/stapelberg/zkj-nas-tools/dornroeschen"
-		if err := wake.PushMainboardPower(*mqttBroker, clientID); err != nil {
-			log.Printf("pushing storage2 mainboard power button failed: %v", err)
-		}
-	} else {
-		if err := wakeonlan.SendMagicPacket(nil, mac); err != nil {
-			log.Printf("sendWOL: %v", err)
-		} else {
-			log.Printf("Sent magic packet to %v", mac)
-		}
+	err := cfg.Wakeup(context.Background())
+	if err == wake.ErrAlreadyRunning {
+		return false, nil // already up and running
 	}
-
-	{
-		ctx, canc := context.WithTimeout(ctx, 5*time.Minute)
-		defer canc()
-		if err := wake.PollSSH(ctx, host+":22"); err != nil {
-			return true, err
-		}
+	if err != nil {
+		return true, err // tried to wake up, but failed
 	}
-
-	log.Printf("NAS %s now reachable via SSH", host)
-
-	return true, nil
+	return true, nil // successfully woken up
 }
 
 func dramaqueenRequest(NAS, lock, method string) error {
@@ -185,7 +162,7 @@ func backup(dest string) bool {
 		log.Fatalf("Could not wake up NAS %s: %v", destHost, err)
 	}
 
-	// TODO: poll for /srv being mounted
+	// Just in case dramaqueen needs some extra time to start up.
 	time.Sleep(60 * time.Second)
 
 	// Run all backups in parallel
