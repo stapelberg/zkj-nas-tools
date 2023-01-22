@@ -26,6 +26,8 @@ require (
 	google.golang.org/protobuf v1.28.1 // indirect
 )
 
+require golang.org/x/exp v0.0.0-20230118134722-a68e582fa157
+
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/google/renameio/v2 v2.0.0 // indirect
