@@ -89,12 +89,20 @@ func main() {
 			}
 		}
 	}()
+
 	go func() {
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, syscall.SIGUSR1)
 		for range c {
 			log.Printf("received SIGUSR1, starting run")
 			runCh <- struct{}{}
+		}
+	}()
+
+	// Subscribe to MQTT, listen for suspendnas command
+	go func() {
+		if err := runMQTT(); err != nil {
+			log.Printf("MQTT: %v", err)
 		}
 	}()
 
