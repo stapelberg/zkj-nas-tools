@@ -36,5 +36,5 @@ require (
 	github.com/mdlayher/watchdog v0.0.0-20201005150459-8bdc4f41966b // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/stapelberg/rsyncparse v0.0.0-20211228091344-84a4474990ee // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/text v0.3.8 // indirect
 )
