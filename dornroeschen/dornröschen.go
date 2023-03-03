@@ -49,7 +49,7 @@ var (
 func splitHostMAC(hostmac string) (host, mac string) {
 	parts := strings.Split(hostmac, "/")
 	if len(parts) != 2 {
-		log.Fatalf(`"%s" is not in format host/MAC`, hostmac)
+		log.Fatalf("%q is not in format host/MAC", hostmac)
 	}
 	return parts[0], parts[1]
 }
@@ -153,13 +153,13 @@ func backup1(destHost, sourceHost, sourceMAC string) error {
 	return nil
 }
 
-func backup(dest string) bool {
+func backup(dest string) (woken bool, _ error) {
 	log.Printf("Backup destination is %s", dest)
 	destHost, destMAC := splitHostMAC(dest)
 
 	wokenNAS, err := wakeUp(destHost, destMAC)
 	if err != nil {
-		log.Fatalf("Could not wake up NAS %s: %v", destHost, err)
+		return false, fmt.Errorf("Could not wake up NAS %s: %v", destHost, err)
 	}
 
 	// Just in case dramaqueen needs some extra time to start up.
@@ -178,10 +178,10 @@ func backup(dest string) bool {
 	}
 
 	if err := eg.Wait(); err != nil {
-		log.Print(err)
+		return wokenNAS, err
 	}
 
-	return wokenNAS
+	return wokenNAS, nil
 }
 
 func suspendNAS(destHost string) {
@@ -191,12 +191,12 @@ func suspendNAS(destHost string) {
 	}
 }
 
-func sync(NASen []string) {
+func sync(NASen []string) error {
 	for _, dest := range NASen {
 		destHost, destMAC := splitHostMAC(dest)
 		woken, err := wakeUp(destHost, destMAC)
 		if err != nil {
-			log.Fatalf("Could not wake up NAS %s\n", destHost)
+			return fmt.Errorf("Could not wake up NAS %s\n", destHost)
 		}
 		if woken {
 			defer suspendNAS(destHost)
@@ -223,6 +223,8 @@ func sync(NASen []string) {
 		// somebody is using them, of course).
 		releaseDramaqueenLock(destHost, "sync")
 	}
+
+	return nil
 }
 
 func run() error {
@@ -238,13 +240,27 @@ func run() error {
 	// Alternate between the available NASen to make sure each one works.
 	dest := storageList[(time.Now().Day()+1)%len(storageList)]
 
+	var firstErr error
 	wokenNAS := false
 	if *runBackup {
-		wokenNAS = backup(dest)
+		var err error
+		wokenNAS, err = backup(dest)
+		if err != nil {
+			log.Printf("backup: %v", err)
+			if firstErr == nil {
+				firstErr = err
+				// Keep going: sync() should run even if backup() fails
+			}
+		}
 	}
 
 	if *runSync {
-		sync(storageList)
+		if err := sync(storageList); err != nil {
+			log.Printf("sync: %v", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
 	}
 
 	if wokenNAS {
@@ -252,5 +268,5 @@ func run() error {
 		suspendNAS(destHost)
 	}
 
-	return nil
+	return firstErr
 }
