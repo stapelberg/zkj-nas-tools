@@ -115,7 +115,7 @@ func IPs() map[string]string {
 func MACs() map[string]string {
 	return map[string]string{
 		// storage2 is woken up via MQTT
-		"storage3": "70:85:c2:b6:02:24",
+		"storage3": "70:85:c2:8d:b9:76",
 		// On-board network card connected for WOL only (link not even up in
 		// Linux).
 		"midna": "04:42:1a:31:9e:97",
