@@ -30,7 +30,7 @@ var (
 		"midna/38:60:77:ab:d3:ea,ex622.zekjur.net/,100.84.178.54/,100.74.87.16/",
 		"Comma-separated list of hosts to back up, each entry is host/mac-address")
 	storageHosts = flag.String("storage_hosts",
-		"10.0.0.252/d0:50:99:9a:0f:4a,10.0.0.253/70:85:c2:b6:02:24",
+		"10.0.0.252/d0:50:99:9a:0f:4a,10.0.0.253/70:85:c2:8d:b9:76",
 		"Comma-separated list of NASen, each entry is host/mac-address")
 	backupPrivateKeyPath = flag.String("ssh_backup_private_key_path",
 		"/perm/id_ed25519_backup",
