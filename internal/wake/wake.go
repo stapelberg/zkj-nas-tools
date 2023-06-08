@@ -30,8 +30,11 @@ func PollSSH1(ctx context.Context, addr string) error {
 }
 
 func PollSSH(ctx context.Context, addr string) error {
+	// Do not try more than one connection attempt per second.
+	tick := time.NewTicker(1 * time.Second)
+	defer tick.Stop()
 	log.Printf("[%s] polling tcp/22 (ssh) port", addr)
-	for {
+	for range tick.C {
 		if err := ctx.Err(); err != nil {
 			log.Printf("[%s] polling ended: %v", addr, err)
 			return err
@@ -42,6 +45,7 @@ func PollSSH(ctx context.Context, addr string) error {
 		}
 		return nil // port 22 became reachable
 	}
+	return nil
 }
 
 func pollHTTPHealthz1(ctx context.Context, addr string) error {
