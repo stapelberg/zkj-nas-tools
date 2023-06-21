@@ -122,7 +122,7 @@ func MACs() map[string]string {
 		"storage3": "70:85:c2:8d:b9:76",
 		// On-board network card connected for WOL only (link not even up in
 		// Linux).
-		"midna": "04:42:1a:31:9e:97",
+		"midna": "a0:36:bc:a9:7b:d1",
 	}
 }
 
