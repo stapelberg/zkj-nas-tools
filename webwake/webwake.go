@@ -123,14 +123,17 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *server) wake(w http.ResponseWriter, r *http.Request) error {
-	if r.Method != "POST" {
-		return httpError(http.StatusBadRequest, fmt.Errorf("invalid method"))
-	}
+	// Shelly Button can only send a GET request
+	// if r.Method != "POST" {
+	// 	return httpError(http.StatusBadRequest, fmt.Errorf("invalid method"))
+	// }
 
 	host := r.FormValue("machine")
 	if host == "" {
 		return httpError(http.StatusBadRequest, fmt.Errorf("no host parameter"))
 	}
+
+	log.Printf("wake(%s)", host)
 
 	ips := wake.IPs()
 	macs := wake.MACs()
