@@ -110,9 +110,10 @@ func PushMainboardPower(mqttBroker, clientID string) error {
 
 func IPs() map[string]string {
 	return map[string]string{
-		"storage2": "10.0.0.252",
-		"storage3": "10.0.0.253",
-		"midna":    "10.0.0.76",
+		"storage2":  "10.0.0.252",
+		"storage3":  "10.0.0.253",
+		"midna":     "10.0.0.76",
+		"verkaufg9": "10.11.0.2",
 	}
 }
 
@@ -122,7 +123,8 @@ func MACs() map[string]string {
 		"storage3": "70:85:c2:8d:b9:76",
 		// On-board network card connected for WOL only (link not even up in
 		// Linux).
-		"midna": "a0:36:bc:a9:7b:d1",
+		"midna":     "a0:36:bc:a9:7b:d1",
+		"verkaufg9": "7c:4d:8f:00:67:0a",
 	}
 }
 
