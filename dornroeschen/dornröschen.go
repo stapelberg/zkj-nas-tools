@@ -280,3 +280,42 @@ func run() error {
 
 	return firstErr
 }
+
+func reachableViaSSH(host string) bool {
+	ctx, canc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer canc()
+	return wake.PollSSH1(ctx, host+":22") == nil
+}
+
+func runOpportunisticBackups1(host string) {
+	var startBackup time.Time
+	prevReachable := false
+	tick := time.Tick(5 * time.Minute)
+	for range tick {
+		nowReachable := reachableViaSSH(host)
+		log.Printf("[%s] opportunistic backup check; reachable=%v", host, nowReachable)
+		if !prevReachable && nowReachable {
+			startBackup = time.Now().Add(15 * time.Minute)
+			log.Printf("[%s] became reachable, starting backup in %v", host, startBackup)
+		} else if prevReachable && !nowReachable {
+			log.Printf("[%s] became unreachable", host)
+			startBackup = time.Time{}
+		} else if prevReachable && nowReachable && time.Now().After(startBackup) && !startBackup.IsZero() {
+			log.Printf("[%s] TODO: actually start the backup!", host)
+			startBackup = time.Time{}
+		}
+		prevReachable = nowReachable
+	}
+}
+
+func runOpportunisticBackups(hostsList string) {
+	hosts := strings.Split(hostsList, ",")
+	for _, hostsPart := range hosts {
+		h := strings.TrimSpace(hostsPart)
+		if h == "" {
+			continue
+		}
+		log.Printf("keeping track of host %s for opportunistic backup", h)
+		go runOpportunisticBackups1(h)
+	}
+}

@@ -28,6 +28,10 @@ var (
 	lastSuccessPath = flag.String("last_success_path",
 		"/perm/dr-last-success.txt",
 		"path to a file in which to load/store the last success timestamp")
+
+	opportunisticBackupHosts = flag.String("opportunistic_backup_hosts",
+		"verkaufg9",
+		"Comma-separated list of hosts to back up when they become reachable")
 )
 
 var lastSuccess = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -105,6 +109,8 @@ func main() {
 			log.Printf("MQTT: %v", err)
 		}
 	}()
+
+	go runOpportunisticBackups(*opportunisticBackupHosts)
 
 	for range runCh {
 		log.Println("Running dornröschen")
