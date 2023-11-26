@@ -216,6 +216,15 @@ func sync(NASen []string) error {
 			log.Printf("Syncing of %s to %s failed: %v", sourceHost, destHost, err)
 		}
 		log.Printf("sync %s to %s output stored in %s", sourceHost, destHost, outputfile)
+
+		// Dump the output into the log, which is persisted via remote syslog:
+		if b, err := ioutil.ReadFile(outputfile); err == nil {
+			log.Println("SSH output")
+			for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+				log.Println("   " + line)
+			}
+			log.Println("End of SSH output")
+		}
 	}
 
 	for _, dest := range NASen {
