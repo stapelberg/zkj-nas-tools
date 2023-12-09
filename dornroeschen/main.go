@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -44,7 +43,7 @@ func init() {
 }
 
 func loadLastSuccess() error {
-	b, err := ioutil.ReadFile(*lastSuccessPath)
+	b, err := os.ReadFile(*lastSuccessPath)
 	if err != nil {
 		return err
 	}
@@ -119,7 +118,7 @@ func main() {
 		}
 		unix := time.Now().Unix()
 		lastSuccess.Set(float64(unix))
-		if err := ioutil.WriteFile(*lastSuccessPath, []byte(fmt.Sprintf("%d", unix)), 0600); err != nil {
+		if err := os.WriteFile(*lastSuccessPath, []byte(fmt.Sprintf("%d", unix)), 0600); err != nil {
 			log.Printf("could not persist last success timestamp to disk: %v", err)
 		}
 

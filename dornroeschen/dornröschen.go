@@ -5,7 +5,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -130,7 +129,7 @@ func backup1(destHost, sourceHost, sourceMAC string) error {
 	// interprets the command as the destination host.
 	outputfile, err := rsyncSSH(sourceHost, *backupPrivateKeyPath, destHost)
 	// Dump the output into the log, which is persisted via remote syslog:
-	if b, err := ioutil.ReadFile(outputfile); err == nil {
+	if b, err := os.ReadFile(outputfile); err == nil {
 		log.Println("SSH output")
 		for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
 			log.Println("   " + line)
@@ -216,7 +215,7 @@ func sync(NASen []string) error {
 		log.Printf("sync %s to %s output stored in %s", sourceHost, destHost, outputfile)
 
 		// Dump the output into the log, which is persisted via remote syslog:
-		if b, err := ioutil.ReadFile(outputfile); err == nil {
+		if b, err := os.ReadFile(outputfile); err == nil {
 			log.Println("SSH output")
 			for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
 				log.Println("   " + line)

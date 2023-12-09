@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -16,7 +15,7 @@ import (
 
 // Reads an OpenSSH key and provides it as a ssh.ClientAuth.
 func openSshClientAuth(path string) (ssh.AuthMethod, error) {
-	privateKey, err := ioutil.ReadFile(path)
+	privateKey, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +146,7 @@ func sshCommand(logger *log.Logger, host, keypath, command string) error {
 	if err != nil {
 		return err
 	}
-	go io.Copy(ioutil.Discard, rd)
+	go io.Copy(io.Discard, rd)
 	if exitCode := wait(); exitCode != 0 {
 		return fmt.Errorf("exit code %d", exitCode)
 	}
