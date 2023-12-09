@@ -154,7 +154,7 @@ func backup1(destHost, sourceHost, sourceMAC string) error {
 	return nil
 }
 
-func backup(dest string) (woken bool, _ error) {
+func backup(dest string, sources []string) (woken bool, _ error) {
 	log.Printf("Backup destination is %s", dest)
 	destHost, destMAC := splitHostMAC(dest)
 
@@ -168,7 +168,7 @@ func backup(dest string) (woken bool, _ error) {
 
 	// Run all backups in parallel
 	var eg errgroup.Group
-	for _, source := range strings.Split(*backupHosts, ",") {
+	for _, source := range sources {
 		sourceHost, sourceMAC := splitHostMAC(source)
 		eg.Go(func() error {
 			if err := backup1(destHost, sourceHost, sourceMAC); err != nil {
@@ -254,7 +254,7 @@ func run() error {
 	wokenNAS := false
 	if *runBackup {
 		var err error
-		wokenNAS, err = backup(dest)
+		wokenNAS, err = backup(dest, strings.Split(*backupHosts, ","))
 		if err != nil {
 			log.Printf("backup: %v", err)
 			if firstErr == nil {
@@ -301,8 +301,28 @@ func runOpportunisticBackups1(host string) {
 			log.Printf("[%s] became unreachable", host)
 			startBackup = time.Time{}
 		} else if prevReachable && nowReachable && time.Now().After(startBackup) && !startBackup.IsZero() {
-			log.Printf("[%s] TODO: actually start the backup!", host)
 			startBackup = time.Time{}
+
+			storageList := strings.Split(*storageHosts, ",")
+			if len(storageList) > 2 {
+				log.Printf("More than 2 -storage_hosts are not supported. Please send a patch to fix.")
+				continue
+			}
+
+			// Alternate between the available NASen to make sure each one works.
+			dest := storageList[(time.Now().Day()+1)%len(storageList)]
+
+			log.Printf("[%s] starting backup to dest=%s", host, dest)
+
+			wokenNAS, err := backup(dest, []string{host + "/"})
+			if err != nil {
+				log.Printf("backup: %v", err)
+			}
+
+			if wokenNAS {
+				destHost, _ := splitHostMAC(dest)
+				suspendNAS(destHost)
+			}
 		}
 		prevReachable = nowReachable
 	}
