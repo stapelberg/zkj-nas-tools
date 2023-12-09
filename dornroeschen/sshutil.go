@@ -3,8 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto"
-	"crypto/rsa"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,25 +13,6 @@ import (
 	"github.com/stapelberg/rsyncprom"
 	"golang.org/x/crypto/ssh"
 )
-
-type keychain struct {
-	key *rsa.PrivateKey
-}
-
-func (k *keychain) Key(i int) (ssh.PublicKey, error) {
-	if i != 0 {
-		return nil, nil
-	}
-	return ssh.NewPublicKey(&k.key.PublicKey)
-}
-
-func (k *keychain) Sign(i int, rand io.Reader, data []byte) (sig []byte, err error) {
-	hashFunc := crypto.SHA1
-	h := hashFunc.New()
-	h.Write(data)
-	digest := h.Sum(nil)
-	return rsa.SignPKCS1v15(rand, k.key, hashFunc, digest)
-}
 
 // Reads an OpenSSH key and provides it as a ssh.ClientAuth.
 func openSshClientAuth(path string) (ssh.AuthMethod, error) {
