@@ -9,13 +9,11 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"os"
 	"strings"
 
 	"github.com/stapelberg/rsyncprom"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/net/proxy"
 )
 
 type keychain struct {
@@ -49,21 +47,6 @@ func openSshClientAuth(path string) (ssh.AuthMethod, error) {
 }
 
 func newSshConnection(host, keypath string) (*ssh.Client, error) {
-	// https://tailscale.com/kb/1015/100.x-addresses/
-	_, tailscaleNet, err := net.ParseCIDR("100.64.0.0/10")
-	if err != nil {
-		return nil, err
-	}
-
-	// tailscaled is running with --socks5-server=localhost:1055
-	tsProxied, err := proxy.SOCKS5("tcp", "localhost:1055", nil, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	tsdialer := proxy.NewPerHost(proxy.Direct, tsProxied)
-	tsdialer.AddNetwork(tailscaleNet)
-
 	clientauth, err := openSshClientAuth(keypath)
 	if err != nil {
 		return nil, err
@@ -77,17 +60,11 @@ func newSshConnection(host, keypath string) (*ssh.Client, error) {
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	addr := host + ":22"
-	conn, err := tsdialer.Dial("tcp", addr)
+	cl, err := ssh.Dial("tcp", host+":22", clientConfig)
 	if err != nil {
 		return nil, err
 	}
-
-	c, chans, reqs, err := ssh.NewClientConn(conn, addr, clientConfig)
-	if err != nil {
-		return nil, err
-	}
-	return ssh.NewClient(c, chans, reqs), nil
+	return cl, nil
 }
 
 func newLogWriter(logger *log.Logger) io.Writer {
