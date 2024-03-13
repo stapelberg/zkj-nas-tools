@@ -18,7 +18,7 @@ require (
 	golang.org/x/net v0.17.0
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
 	golang.org/x/sys v0.15.0 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 )
 
 require golang.org/x/exp v0.0.0-20230118134722-a68e582fa157
