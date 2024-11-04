@@ -47,10 +47,10 @@ github.com/prometheus/common v0.38.0 h1:VTQitp6mXTdUoCmDMugDVOJ1opi6ADftKfp/yeqT
 github.com/prometheus/common v0.38.0/go.mod h1:MBXfmBQZrK5XpbCkjofnXs96LD2QQ7fEq4C0xjC/yec=
 github.com/prometheus/procfs v0.8.0 h1:ODq8ZFEaYeCaZOJlZZdJA2AbQR98dSHSM1KW/You5mo=
 github.com/prometheus/procfs v0.8.0/go.mod h1:z7EfXMXOkbkqb9IINtpCn86r/to3BnA0uaxHdg830/4=
-github.com/stapelberg/rsyncparse v0.0.0-20211228091344-84a4474990ee h1:wuLUw6Da+JIYpnaHTF6lTI4sUXf5WPXAbf8meDNYLu0=
-github.com/stapelberg/rsyncparse v0.0.0-20211228091344-84a4474990ee/go.mod h1:EEcIYHDFjCLD6qdDQ0XofqFAMIUGioghhZBIcWX6+is=
-github.com/stapelberg/rsyncprom v0.0.0-20220111200458-bbf82934093b h1:IJ/X931yl1fj+VIG61ZcojSKFjgW9xVWw6G3u8OdcCE=
-github.com/stapelberg/rsyncprom v0.0.0-20220111200458-bbf82934093b/go.mod h1:wpLfuNuXRwu8TkZa8bn5RMchM/GljAlhqFVovQmgdDk=
+github.com/stapelberg/rsyncparse v0.0.0-20240130202559-76f2a26bb33f h1:Zy2uOZcpV88v1dy0iFVVj39cKPwirs8jW8awIRVrdjg=
+github.com/stapelberg/rsyncparse v0.0.0-20240130202559-76f2a26bb33f/go.mod h1:EEcIYHDFjCLD6qdDQ0XofqFAMIUGioghhZBIcWX6+is=
+github.com/stapelberg/rsyncprom v0.0.0-20240519080021-6451b1ad259f h1:HGbRt/pkCCptj+/A0UgqnNzCnQ4TGW2oXrwpdfI53RM=
+github.com/stapelberg/rsyncprom v0.0.0-20240519080021-6451b1ad259f/go.mod h1:GjhpCcKV8RvtBylmKKTRESx2gv7g3/0tqPgfLglZGeY=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.21.0 h1:X31++rzVUdKhX5sWmSOFZxx8UW/ldWx55cbf08iNAMA=
 golang.org/x/crypto v0.21.0/go.mod h1:0BP7YvVV9gBbVKyeTG0Gyn+gZm94bibOW5BjDEYAOMs=
