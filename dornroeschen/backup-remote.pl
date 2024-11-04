@@ -11,7 +11,7 @@ if (my ($destination) = ($ENV{SSH_ORIGINAL_COMMAND} =~ /^([a-z0-9.]+)$/)) {
     my $lines = `/usr/bin/rsync --list-only -e ssh ${destination}:/`;
     my @dates = sort
                 grep { defined }
-                map { / ([0-9-]+)$/; $1 }
+                map { / ([0-9-]+)$/ && $1 || undef }
                 split("\n", $lines);
     my $today = strftime("%Y-%m-%d", localtime);
     my @rsync = (
