@@ -14,10 +14,10 @@ require (
 	github.com/prometheus/common v0.38.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/stapelberg/rsyncprom v0.0.0-20240519080021-6451b1ad259f
-	golang.org/x/crypto v0.21.0
+	golang.org/x/crypto v0.31.0
 	golang.org/x/net v0.23.0
-	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/sync v0.10.0
+	golang.org/x/sys v0.28.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 )
 
@@ -31,5 +31,5 @@ require (
 	github.com/mdlayher/watchdog v0.0.0-20201005150459-8bdc4f41966b // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/stapelberg/rsyncparse v0.0.0-20240130202559-76f2a26bb33f // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )
