@@ -56,9 +56,11 @@ func wakeUp(host, mac string) (woken bool, _ error) {
 	cfg := wake.Config{
 		MQTTBroker: *mqttBroker,
 		ClientID:   "https://github.com/stapelberg/zkj-nas-tools/dornroeschen",
-		Host:       host,
-		IP:         host,
-		MAC:        mac,
+		Target: wake.Host{
+			Name: host,
+			IP:   host,
+			MAC:  mac,
+		},
 	}
 	err := cfg.Wakeup(context.Background())
 	if err == wake.ErrAlreadyRunning {

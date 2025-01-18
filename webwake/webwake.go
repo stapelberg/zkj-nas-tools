@@ -8,14 +8,14 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"maps"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/gokrazy/gokrazy"
 	"github.com/stapelberg/zkj-nas-tools/internal/wake"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -107,14 +107,11 @@ type server struct {
 }
 
 func (s *server) index(w http.ResponseWriter, r *http.Request) error {
-	ips := wake.IPs()
-	machines := maps.Keys(ips)
-	sort.Strings(machines)
 	var buf bytes.Buffer
 	if err := indexTmpl.Execute(&buf, struct {
 		Machines []string
 	}{
-		Machines: machines,
+		Machines: slices.Sorted(maps.Keys(wake.Hosts)),
 	}); err != nil {
 		return err
 	}
@@ -135,17 +132,14 @@ func (s *server) wake(w http.ResponseWriter, r *http.Request) error {
 
 	log.Printf("wake(%s)", host)
 
-	ips := wake.IPs()
-	macs := wake.MACs()
-	if _, ok := ips[host]; !ok {
+	target, ok := wake.Hosts[host]
+	if !ok {
 		return httpError(http.StatusNotFound, fmt.Errorf("host not found"))
 	}
 	cfg := wake.Config{
 		MQTTBroker: s.mqttBroker,
 		ClientID:   "github.com/stapelberg/zkj-nas-tools/webwake",
-		Host:       host,
-		IP:         ips[host],
-		MAC:        macs[host],
+		Target:     target,
 	}
 	message := "waking up…"
 	err := cfg.Wakeup(context.Background())

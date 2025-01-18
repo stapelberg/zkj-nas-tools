@@ -109,42 +109,49 @@ func PushMainboardPower(mqttBroker, clientID string) error {
 	return nil
 }
 
-func IPs() map[string]string {
-	return map[string]string{
-		"storage2":  "10.0.0.252",
-		"storage3":  "10.0.0.253",
-		"midna":     "10.0.0.76",
-		"verkaufg9": "10.11.0.2",
-	}
+type Host struct {
+	Name string
+	IP   string
+	MAC  string
 }
 
-func MACs() map[string]string {
-	return map[string]string{
-		// storage2 is woken up via MQTT
-		"storage3": "70:85:c2:8d:b9:76",
-		// On-board network card connected for WOL only (link not even up in
-		// Linux).
-		"midna":     "a0:36:bc:a9:7b:d1",
-		"verkaufg9": "7c:4d:8f:00:67:0a",
-	}
+var Hosts = map[string]Host{
+	"midna": {
+		Name: "midna",
+		IP:   "10.0.0.76", // static lease
+		MAC:  "60:cf:84:65:d9:e3",
+	},
+	"storage2": {
+		Name: "storage2",
+		IP:   "10.0.0.252",
+		// No MAC, woken up via MQTT
+	},
+	"storage3": {
+		Name: "storage3",
+		IP:   "10.0.0.253",
+		MAC:  "70:85:c2:8d:b9:76",
+	},
+	"verkaufg9": {
+		Name: "verkaufg9",
+		IP:   "10.11.0.2",
+		MAC:  "7c:4d:8f:00:67:0a",
+	},
 }
 
 type Config struct {
 	MQTTBroker string
 	ClientID   string
 
-	Host string
-	IP   string
-	MAC  string
+	Target Host
 }
 
 // The wake tool is invoked using speaking names (storage2, storage3), whereas
 // dornroeschen uses the IP address as name. This function identifies storage
 // targets using name or IP.
 func (c *Config) isStorage() bool {
-	return strings.HasPrefix(c.Host, "storage") ||
-		c.IP == "10.0.0.252" ||
-		c.IP == "10.0.0.253"
+	return strings.HasPrefix(c.Target.Name, "storage") ||
+		c.Target.IP == "10.0.0.252" ||
+		c.Target.IP == "10.0.0.253"
 }
 
 var ErrAlreadyRunning = errors.New("already running")
@@ -156,36 +163,36 @@ var ErrAlreadyRunning = errors.New("already running")
 // signaling that the /srv mountpoint was successfully mounted.
 func (c *Config) Wakeup(ctx context.Context) error {
 	{
-		log.Printf("checking if tcp/22 (ssh) is available on %s", c.Host)
+		log.Printf("checking if tcp/22 (ssh) is available on %s", c.Target.Name)
 		ctx, canc := context.WithTimeout(ctx, 5*time.Second)
 		defer canc()
-		if err := PollSSH1(ctx, c.IP+":22"); err == nil {
+		if err := PollSSH1(ctx, c.Target.IP+":22"); err == nil {
 			log.Printf("SSH already up and running")
 
 			if c.isStorage() {
 				ctx, canc := context.WithTimeout(ctx, 5*time.Minute)
 				defer canc()
-				if err := PollHTTPHealthz(ctx, c.IP+":8200"); err != nil {
+				if err := PollHTTPHealthz(ctx, c.Target.IP+":8200"); err != nil {
 					return err
 				}
-				log.Printf("host %s signals /srv is mounted", c.Host)
+				log.Printf("host %s signals /srv is mounted", c.Target.Name)
 			}
 
 			return ErrAlreadyRunning
 		}
 	}
 
-	if c.Host == "storage2" || c.IP == "10.0.0.252" {
+	if c.Target.Name == "storage2" || c.Target.IP == "10.0.0.252" {
 		// push the mainboard power button to turn off the PC part (ESP32 will
 		// keep running on USB +5V standby power).
 		log.Printf("pushing storage2 mainboard power button")
 		if err := PushMainboardPower(c.MQTTBroker, c.ClientID); err != nil {
 			log.Printf("pushing storage2 mainboard power button failed: %v", err)
 		}
-	} else if c.Host == "verkaufg9" {
+	} else if c.Target.Name == "verkaufg9" {
 		log.Printf("triggering webwake on blr")
 		resp, err := http.PostForm("http://blr.monkey-turtle.ts.net:8911/wake", url.Values{
-			"machine": []string{c.Host},
+			"machine": []string{c.Target.Name},
 		})
 		if err != nil {
 			return err
@@ -195,7 +202,7 @@ func (c *Config) Wakeup(ctx context.Context) error {
 		log.Printf("body: %s", b)
 		return nil
 	} else {
-		log.Printf("Sending magic packet to %v", c.MAC)
+		log.Printf("Sending magic packet to %v", c.Target.MAC)
 		ips, err := ifaddr.PrivateInterfaceAddrs()
 		if err != nil {
 			return err
@@ -211,29 +218,29 @@ func (c *Config) Wakeup(ctx context.Context) error {
 				break
 			}
 		}
-		if err := wakeonlan.SendMagicPacket(laddr, c.MAC); err != nil {
+		if err := wakeonlan.SendMagicPacket(laddr, c.Target.MAC); err != nil {
 			log.Printf("sendWOL: %v", err)
 		} else {
-			log.Printf("Sent magic packet to %v", c.MAC)
+			log.Printf("Sent magic packet to %v", c.Target.MAC)
 		}
 	}
 
 	{
 		ctx, canc := context.WithTimeout(ctx, 5*time.Minute)
 		defer canc()
-		if err := PollSSH(ctx, c.IP+":22"); err != nil {
+		if err := PollSSH(ctx, c.Target.IP+":22"); err != nil {
 			return err
 		}
-		log.Printf("host %s now awake", c.Host)
+		log.Printf("host %s now awake", c.Target.Name)
 	}
 
 	if c.isStorage() {
 		ctx, canc := context.WithTimeout(ctx, 5*time.Minute)
 		defer canc()
-		if err := PollHTTPHealthz(ctx, c.IP+":8200"); err != nil {
+		if err := PollHTTPHealthz(ctx, c.Target.IP+":8200"); err != nil {
 			return err
 		}
-		log.Printf("host %s signals /srv is mounted", c.Host)
+		log.Printf("host %s signals /srv is mounted", c.Target.Name)
 	}
 
 	return nil
