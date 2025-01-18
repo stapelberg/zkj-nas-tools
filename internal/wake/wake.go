@@ -110,31 +110,36 @@ func PushMainboardPower(mqttBroker, clientID string) error {
 }
 
 type Host struct {
-	Name string
-	IP   string
-	MAC  string
+	Name  string
+	IP    string
+	MAC   string
+	Relay string // webwake instance
 }
 
 var Hosts = map[string]Host{
 	"midna": {
-		Name: "midna",
-		IP:   "10.0.0.76", // static lease
-		MAC:  "60:cf:84:65:d9:e3",
+		Name:  "midna",
+		IP:    "10.0.0.76", // static lease
+		MAC:   "60:cf:84:65:d9:e3",
+		Relay: "router7",
 	},
 	"storage2": {
 		Name: "storage2",
 		IP:   "10.0.0.252",
 		// No MAC, woken up via MQTT
+		Relay: "router7",
 	},
 	"storage3": {
-		Name: "storage3",
-		IP:   "10.0.0.253",
-		MAC:  "70:85:c2:8d:b9:76",
+		Name:  "storage3",
+		IP:    "10.0.0.253",
+		MAC:   "70:85:c2:8d:b9:76",
+		Relay: "router7",
 	},
 	"verkaufg9": {
-		Name: "verkaufg9",
-		IP:   "10.11.0.2",
-		MAC:  "7c:4d:8f:00:67:0a",
+		Name:  "verkaufg9",
+		IP:    "10.11.0.2",
+		MAC:   "7c:4d:8f:00:67:0a",
+		Relay: "blr",
 	},
 }
 

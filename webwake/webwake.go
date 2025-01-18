@@ -8,9 +8,9 @@ import (
 	"html/template"
 	"io"
 	"log"
-	"maps"
 	"net/http"
-	"slices"
+	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -106,12 +106,28 @@ type server struct {
 	mqttBroker string
 }
 
+var hostname = func() string {
+	host, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+	return host
+}()
+
 func (s *server) index(w http.ResponseWriter, r *http.Request) error {
+	filtered := make([]string, 0, len(wake.Hosts))
+	for _, host := range wake.Hosts {
+		if host.Relay != hostname {
+			continue
+		}
+		filtered = append(filtered, host.Name)
+	}
+	sort.Strings(filtered)
 	var buf bytes.Buffer
 	if err := indexTmpl.Execute(&buf, struct {
 		Machines []string
 	}{
-		Machines: slices.Sorted(maps.Keys(wake.Hosts)),
+		Machines: filtered,
 	}); err != nil {
 		return err
 	}
