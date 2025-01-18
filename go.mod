@@ -15,13 +15,11 @@ require (
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/stapelberg/rsyncprom v0.0.0-20240519080021-6451b1ad259f
 	golang.org/x/crypto v0.31.0
-	golang.org/x/net v0.23.0
+	golang.org/x/net v0.33.0
 	golang.org/x/sync v0.10.0
 	golang.org/x/sys v0.28.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 )
-
-require golang.org/x/exp v0.0.0-20230118134722-a68e582fa157
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
