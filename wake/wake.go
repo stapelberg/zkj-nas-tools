@@ -1,37 +1,51 @@
 package main
 
 import (
-	"context"
 	"flag"
+	"io"
 	"log"
 	"maps"
+	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
 	"github.com/stapelberg/zkj-nas-tools/internal/wake"
 )
 
+func syntaxFatal() {
+	log.Fatalf("syntax: wake <%s>", strings.Join(slices.Sorted(maps.Keys(wake.Hosts)), "|"))
+}
+
+func wake1(target wake.Host) error {
+	// We can append .monkey-turtle.ts.net, but DNS resolution should work.
+	wakeURL := "http://" + target.Relay + ":8911/wake"
+	log.Printf("wakeURL: %s", wakeURL)
+	resp, err := http.PostForm(wakeURL, url.Values{
+		"machine": []string{target.Name},
+	})
+	if err != nil {
+		return err
+	}
+	log.Printf("wake resp: %v", resp.Status)
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	log.Printf("body: %s", b)
+	return nil
+}
+
 func main() {
-	var (
-		mqttBroker = flag.String("mqtt_broker",
-			"tcp://dr.lan:1883",
-			"MQTT broker address for github.com/eclipse/paho.mqtt.golang")
-	)
 	flag.Parse()
 	if flag.NArg() != 1 {
-		log.Fatalf("syntax: wake <storage2|storage3|midna>")
+		syntaxFatal()
 	}
-	hostname := flag.Arg(0)
-	target, ok := wake.Hosts[hostname]
+	target, ok := wake.Hosts[flag.Arg(0)]
 	if !ok {
-		log.Fatalf("syntax: wake <%s>", strings.Join(slices.Sorted(maps.Keys(wake.Hosts)), "|"))
+		syntaxFatal()
 	}
-	cfg := wake.Config{
-		MQTTBroker: *mqttBroker,
-		ClientID:   "github.com/stapelberg/zkj-nas-tools/wake",
-		Target:     target,
-	}
-	if err := cfg.Wakeup(context.Background()); err != nil && err != wake.ErrAlreadyRunning {
+	if err := wake1(target); err != nil {
 		log.Fatal(err)
 	}
 }

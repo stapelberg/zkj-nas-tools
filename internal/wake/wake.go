@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -194,18 +193,6 @@ func (c *Config) Wakeup(ctx context.Context) error {
 		if err := PushMainboardPower(c.MQTTBroker, c.ClientID); err != nil {
 			log.Printf("pushing storage2 mainboard power button failed: %v", err)
 		}
-	} else if c.Target.Name == "verkaufg9" {
-		log.Printf("triggering webwake on blr")
-		resp, err := http.PostForm("http://blr.monkey-turtle.ts.net:8911/wake", url.Values{
-			"machine": []string{c.Target.Name},
-		})
-		if err != nil {
-			return err
-		}
-		log.Printf("wake resp: %v", resp.Status)
-		b, _ := io.ReadAll(resp.Body)
-		log.Printf("body: %s", b)
-		return nil
 	} else {
 		log.Printf("Sending magic packet to %v", c.Target.MAC)
 		ips, err := ifaddr.PrivateInterfaceAddrs()
