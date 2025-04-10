@@ -97,13 +97,17 @@ func PushMainboardPower(mqttBroker, clientID string) error {
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
 		return fmt.Errorf("MQTT connection failed: %v", token.Error())
 	}
+	defer mqttClient.Disconnect(1000 /* wait 1s for existing work to be completed */)
 
 	const topic = "resetesp/switch/powerbtn/command"
-	mqttClient.Publish(
+	token := mqttClient.Publish(
 		topic,
 		0,     /* qos */
 		false, /* retained */
 		string("on"))
+	if !token.WaitTimeout(30 * time.Second) {
+		return fmt.Errorf("could not publish MQTT message within 30s: %v", token.Error())
+	}
 
 	return nil
 }
