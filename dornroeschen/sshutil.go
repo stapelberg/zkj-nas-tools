@@ -126,7 +126,7 @@ func rsyncSSH(host, keypath, command string) (string, error) {
 
 	ctx := context.Background()
 	params := rsyncprom.WrapParams{
-		Pushgateway: "https://pushgateway.ts.zekjur.net",
+		Pushgateway: "https://pushgateway.monkey-turtle.ts.net",
 		Instance:    "dr@" + host,
 		Job:         "rsync",
 	}
