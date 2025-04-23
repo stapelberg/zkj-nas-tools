@@ -56,6 +56,8 @@ func loadLastSuccess() error {
 }
 
 func main() {
+	flag.Parse()
+
 	gokrazy.WaitForClock()
 
 	if err := loadLastSuccess(); err != nil {
