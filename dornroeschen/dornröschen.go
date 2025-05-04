@@ -36,7 +36,7 @@ var (
 		"/perm/id_ed25519_suspend",
 		"Path to the SSH private key file to authenticate with at -backup_hosts for suspending to RAM")
 	syncPrivateKeyPath = flag.String("ssh_sync_private_key_path",
-		"/perm/id_rsa_sync",
+		"/perm/id_ed25519_drsync",
 		"Path to the SSH private key file to authenticate with at -storage_hosts for syncing")
 
 	mqttBroker = flag.String("mqtt_broker",
