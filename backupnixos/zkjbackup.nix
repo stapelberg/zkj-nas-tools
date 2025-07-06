@@ -4,7 +4,7 @@
 # https://nix.dev/manual/nix/2.26/language/string-literals#string-literals
 
 # For writers.writePerlBin, see:
-# https://nixos.wiki/wiki/Nix-writers
+# https://wiki.nixos.org/wiki/Nix-writers
 
 # For lib.concatStringsSep, see:
 # https://nix.dev/manual/nix/2.18/language/builtins#builtins-concatStringsSep
@@ -86,18 +86,12 @@ in
 
     "storage3-ed25519" = {
       hostNames = [ "10.0.0.253" "2a02:168:4a00:0:10::253" ];
-      publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP833ofUfclrHj9n3YpqPfMN6CTlbhe+/yEj76hxal8k";
+      publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINHmcUsv4xYAu6oBCoP5904xqx8X1Qi6W1XNRKBK3AF8";
     };
 
     "storage3-rsa" = {
       hostNames = [ "10.0.0.253" "2a02:168:4a00:0:10::253" ];
-      publicKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCHcTgcgspjcKtj92nbnhJklbkC4J4rSJAQ6KG+deLMJDVSxSw8HZAHXx4eJPA0+QMmY6gmOcwshAevRXbXObcOhKZduD17+oRlRm2pLHWSirKjB3EBvT0jYrMrf0CZQ+uxU7ozVeyPspoOAxNr7ekqJDMYfM+/xdfysre9YQnxt6dfDF425WdjlnJ+aeXRzIDOaAZmnFuMqUfSlqYyh3Tfg6gwVTkiMMwlEcMiNmIofAEa2oMMaGL6Qi6OzreH/sK7Jz8n5p2Bezk88D53TB87VyLkAj/eUS8J+ptDuhOgKfOvxIR2iNwDQN7gcDx/JurxZd9wP6NSVEAe45ddPRefn9uDHnK6g9ClbuHpB8AnDu8uyT4Gbcx0gKqFE+MpSKEZQoUEARYN7LmF6GuoWNC3pHol5QmUALt2isDTcwAvZ6rnFm3RUFfQZPKy/dAEpzRPbeAqBdekSoLfhR/D7S/X9M5ol+wFbhHrdolibUy67gG7pfd16zD9u33bZ4BzNfs=";
-    };
-
-    "storage3-ecdsa" = {
-      hostNames = [ "10.0.0.253" "2a02:168:4a00:0:10::253" ];
-      publicKey = "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBChEmC7cqFIiJvlQDcudCuYeR5k3Km8nBAos20evrylj3LFqk15zjiARcygQF8iDxqP/HC8YELAJqG7EiLmHChQ=";
+      publicKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDS+R0Jfq1ybrb0fQYXsyKYaJEbxgl8yFRK4J+uPTkqUoqcbLNwzbLC4/1KWLbzRxexltCmkFb3P9QonckXBUE0SIs9zwhlnRhquQwF1adyQ4veN69PiZ5eNHdeT0R1fyimPMdBlutOtnupunM23EVfUyn7dusuyl3WM+aASjnMgHHamd+9RykCW5UlJH21AuT6tJc1Gt2qa6FMlusZcbYP9WZ0gDSCK9dig01+p7Tfn0OQpWExhiRJRr/tiRkeHUtQCIrZaMffZgy/0j6wcNVqF2cG1dp4NCvn1LFuI9TWVOriwFC03iukJ/SNyMpjIu+yu1lAL/wJrH3eld66/dAHz3In/hU8okSS9sE3Unii6HfHBzeCvfkzxLCif6n+23ZxHuVCrsKyVuOhlPLhF7bZvpxNaCEOvRzSzc0w9Z9AE8V5KESb9KBn8Jq7UlwwaOQdVL1CJEDhJtlIYkJ8Jfk6myPIA/UisuBwR0gyaR0uG5KrT7GSMIVjPmR0jave2ftLxwxn5LtmbOiWnTWawWPod8u0WEqK8g5AuMLX4TzX+9dEt+u0eLGXIKIH6A26VXgpQkphnz7EbIaWtT5RVssAGK0PmA3T6WuOfUJj1OmKeL+OBv2vVC0M4tc2xVjyC7hoLW6+QKpgxwrY1sqBQv0Fmh+RvM8eRrORQdHdHaJN2Q==";
     };
   };
-
 }
