@@ -70,6 +70,10 @@ let
         or die "prune failed: $?";
   '';
 
+  postgresDumpWrapper = pkgs.writeShellScriptBin "zkj-postgres-dump" ''
+    exec ${postgresDump}/bin/zkj-postgres-dump ${lib.escapeShellArgs config.services.zkjbackup.postgresqlDatabases}
+  '';
+
   backuppl = pkgs.writers.writePerlBin "backuppl" { libraries = [ ]; } ''
     # This script is run via ssh from dornröschen.
     use strict;
@@ -149,6 +153,12 @@ in
         [ ];
     description = "List of commands to run before the backup.";
   };
+
+  # Install zkj-postgres-dump as a command to run interactively,
+  # for pull-prod scripts for development.
+  config.environment.systemPackages = [
+    postgresDumpWrapper
+  ];
 
   config.users.users.root.openssh.authorizedKeys.keys = lib.mkAfter [
     ''command="${backuppl}/bin/backuppl",no-port-forwarding,no-X11-forwarding ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICh4nMgU3AneqUonvplI/Nx1LrSCG5C6eM4LKKZW+Yxn michael@dr.zekjur.net''
