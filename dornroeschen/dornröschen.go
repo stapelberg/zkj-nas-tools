@@ -24,7 +24,7 @@ var (
 		true,
 		"Sync all -storage_hosts? See also -backup")
 	backupHosts = flag.String("backup_hosts",
-		"midna/38:60:77:ab:d3:ea,ex622.zekjur.net/,zammadn/,web/,batchn/,shopn/,frigaten/,archivn/",
+		"midna/38:60:77:ab:d3:ea,ex622.zekjur.net/,ax52/,zammadn/,web/,batchn/,shopn/,frigaten/,archivn/",
 		"Comma-separated list of hosts to back up, each entry is host/mac-address")
 	storageHosts = flag.String("storage_hosts",
 		"10.0.0.252/d0:50:99:9a:0f:4a,10.0.0.253/70:85:c2:8d:b9:76",
