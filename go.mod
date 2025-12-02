@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/eclipse/paho.mqtt.golang v1.4.1
+	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/fearful-symmetry/garlic v0.3.1-0.20210628181010-3527257082c1
 	github.com/gokrazy/gokrazy v0.0.0-20221113114523-dd415c9ee654
 	github.com/gokrazy/internal v0.0.0-20220129150711-9ed298107648 // indirect
@@ -24,7 +24,7 @@ require (
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/google/renameio/v2 v2.0.0 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mdlayher/watchdog v0.0.0-20201005150459-8bdc4f41966b // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
