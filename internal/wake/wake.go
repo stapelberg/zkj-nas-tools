@@ -164,48 +164,77 @@ func (c *Config) isStorage() bool {
 
 var ErrAlreadyRunning = errors.New("already running")
 
+// ProgressFunc is called to report progress during wakeup.
+// phase is one of: "checking", "waking", "ssh", "health", "complete"
+// status is one of: "start", "done", "skipped", "error", "already_running"
+type ProgressFunc func(phase, status, detail string)
+
 // Wakeup wakes up the specified host unless it is already running.
 // A host is considered up when it accepts SSH connections (tcp/22).
 //
 // For hosts storage*, HTTP on port 8200 needs to return HTTP 200, too,
 // signaling that the /srv mountpoint was successfully mounted.
 func (c *Config) Wakeup(ctx context.Context) error {
+	return c.WakeupWithProgress(ctx, nil)
+}
+
+// WakeupWithProgress is like Wakeup but calls progressFn to report progress.
+func (c *Config) WakeupWithProgress(ctx context.Context, progressFn ProgressFunc) error {
+	if progressFn == nil {
+		progressFn = func(phase, status, detail string) {}
+	}
+
+	// Phase: checking
+	progressFn("checking", "start", fmt.Sprintf("checking tcp/22 on %s", c.Target.Name))
 	{
 		log.Printf("checking if tcp/22 (ssh) is available on %s", c.Target.Name)
-		ctx, canc := context.WithTimeout(ctx, 5*time.Second)
+		checkCtx, canc := context.WithTimeout(ctx, 5*time.Second)
 		defer canc()
-		if err := PollSSH1(ctx, c.Target.IP+":22"); err == nil {
+		if err := PollSSH1(checkCtx, c.Target.IP+":22"); err == nil {
 			log.Printf("SSH already up and running")
+			progressFn("checking", "done", "already running")
 
 			if c.isStorage() {
-				ctx, canc := context.WithTimeout(ctx, 5*time.Minute)
+				progressFn("health", "start", "checking /srv mount")
+				healthCtx, canc := context.WithTimeout(ctx, 5*time.Minute)
 				defer canc()
-				if err := PollHTTPHealthz(ctx, c.Target.IP+":8200"); err != nil {
+				if err := PollHTTPHealthz(healthCtx, c.Target.IP+":8200"); err != nil {
+					progressFn("health", "error", err.Error())
 					return err
 				}
 				log.Printf("host %s signals /srv is mounted", c.Target.Name)
+				progressFn("health", "done", "/srv mounted")
 			}
 
+			progressFn("complete", "already_running", "")
 			return ErrAlreadyRunning
 		}
+		progressFn("checking", "done", "host is down")
 	}
 
+	// Phase: waking
+	progressFn("waking", "start", "sending wake signal")
 	if c.Target.Name == "storage2" || c.Target.IP == "10.0.0.252" {
 		// push the mainboard power button to turn off the PC part (ESP32 will
 		// keep running on USB +5V standby power).
 		log.Printf("pushing storage2 mainboard power button")
 		if err := PushMainboardPower(c.MQTTBroker, c.ClientID); err != nil {
 			log.Printf("pushing storage2 mainboard power button failed: %v", err)
+			progressFn("waking", "error", err.Error())
+		} else {
+			progressFn("waking", "done", "pushed mainboard power button")
 		}
 	} else {
 		log.Printf("Sending magic packet to %v", c.Target.MAC)
 		ips, err := ifaddr.PrivateInterfaceAddrs()
 		if err != nil {
+			progressFn("waking", "error", err.Error())
 			return err
 		}
 		var laddr *net.UDPAddr
 		_, lan, err := net.ParseCIDR("10.0.0.0/8")
 		if err != nil {
+			progressFn("waking", "error", err.Error())
 			return err
 		}
 		for _, ipstr := range ips {
@@ -216,28 +245,41 @@ func (c *Config) Wakeup(ctx context.Context) error {
 		}
 		if err := wakeonlan.SendMagicPacket(laddr, c.Target.MAC); err != nil {
 			log.Printf("sendWOL: %v", err)
+			progressFn("waking", "error", err.Error())
 		} else {
 			log.Printf("Sent magic packet to %v", c.Target.MAC)
+			progressFn("waking", "done", fmt.Sprintf("sent magic packet to %s", c.Target.MAC))
 		}
 	}
 
+	// Phase: ssh
+	progressFn("ssh", "start", "polling tcp/22")
 	{
-		ctx, canc := context.WithTimeout(ctx, 5*time.Minute)
+		sshCtx, canc := context.WithTimeout(ctx, 5*time.Minute)
 		defer canc()
-		if err := PollSSH(ctx, c.Target.IP+":22"); err != nil {
+		if err := PollSSH(sshCtx, c.Target.IP+":22"); err != nil {
+			progressFn("ssh", "error", err.Error())
 			return err
 		}
 		log.Printf("host %s now awake", c.Target.Name)
+		progressFn("ssh", "done", "ssh responding")
 	}
 
+	// Phase: health
 	if c.isStorage() {
-		ctx, canc := context.WithTimeout(ctx, 5*time.Minute)
+		progressFn("health", "start", "checking /srv mount")
+		healthCtx, canc := context.WithTimeout(ctx, 5*time.Minute)
 		defer canc()
-		if err := PollHTTPHealthz(ctx, c.Target.IP+":8200"); err != nil {
+		if err := PollHTTPHealthz(healthCtx, c.Target.IP+":8200"); err != nil {
+			progressFn("health", "error", err.Error())
 			return err
 		}
 		log.Printf("host %s signals /srv is mounted", c.Target.Name)
+		progressFn("health", "done", "/srv mounted")
+	} else {
+		progressFn("health", "skipped", "")
 	}
 
+	progressFn("complete", "done", "")
 	return nil
 }

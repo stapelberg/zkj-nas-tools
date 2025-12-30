@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
@@ -177,6 +178,85 @@ func (s *server) wake(w http.ResponseWriter, r *http.Request) error {
 	return err
 }
 
+// progressEvent is a Server-Sent Event to report wake progress.
+type progressEvent struct {
+	Phase     string `json:"phase"`
+	Status    string `json:"status"`
+	Detail    string `json:"detail,omitempty"`
+	ElapsedMs int64  `json:"elapsed_ms,omitempty"`
+}
+
+func (s *server) wakeStream(w http.ResponseWriter, r *http.Request) error {
+	host := r.FormValue("machine")
+	if host == "" {
+		return httpError(http.StatusBadRequest, fmt.Errorf("no host parameter"))
+	}
+
+	log.Printf("wakeStream(%s)", host)
+
+	target, ok := wake.Hosts[host]
+	if !ok {
+		return httpError(http.StatusNotFound, fmt.Errorf("host not found"))
+	}
+
+	// Set up SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return httpError(http.StatusInternalServerError, fmt.Errorf("streaming not supported"))
+	}
+
+	cfg := wake.Config{
+		MQTTBroker: s.mqttBroker,
+		ClientID:   "github.com/stapelberg/zkj-nas-tools/webwake",
+		Target:     target,
+	}
+
+	startTime := time.Now()
+	phaseStart := time.Now()
+
+	sendEvent := func(event progressEvent) {
+		if event.Status == "start" {
+			phaseStart = time.Now() // reset for newly starting phase
+		} else {
+			event.ElapsedMs = time.Since(phaseStart).Milliseconds()
+		}
+		if event.Phase == "complete" {
+			event.ElapsedMs = time.Since(startTime).Milliseconds()
+		}
+		data, err := json.Marshal(event)
+		if err != nil {
+			log.Printf("failed to marshal event: %v", err)
+			return
+		}
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+	}
+
+	progressFn := func(phase, status, detail string) {
+		sendEvent(progressEvent{
+			Phase:  phase,
+			Status: status,
+			Detail: detail,
+		})
+	}
+
+	err := cfg.WakeupWithProgress(r.Context(), progressFn)
+	if err != nil && err != wake.ErrAlreadyRunning {
+		sendEvent(progressEvent{
+			Phase:  "complete",
+			Status: "error",
+			Detail: err.Error(),
+		})
+	}
+
+	return nil
+}
+
 func listenAndServe(ctx context.Context, srv *http.Server) error {
 	errC := make(chan error)
 	go func() {
@@ -216,6 +296,7 @@ func webwake() error {
 	mux := http.NewServeMux()
 	mux.Handle("/", handleError(srv.index))
 	mux.Handle("/wake", handleError(srv.wake))
+	mux.Handle("/wake/stream", handleError(srv.wakeStream))
 
 	eg, ctx := errgroup.WithContext(context.Background())
 	for _, addr := range strings.Split(*listenAddr, ",") {
