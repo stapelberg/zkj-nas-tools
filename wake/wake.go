@@ -146,7 +146,9 @@ func wake1(target wake.Host) error {
 	startTime := time.Now()
 	spinnerFrame := 0
 
-	fmt.Print(render(target.Name, phasesCopy, spinnerFrame, 0, false))
+	output := render(target.Name, phasesCopy, spinnerFrame, 0, false)
+	printedLines := strings.Count(output, "\n")
+	fmt.Print(output)
 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -172,6 +174,12 @@ func wake1(target wake.Host) error {
 		done <- scanner.Err()
 	}()
 
+	rerender := func(dur time.Duration) {
+		clearLines(printedLines)
+		output := render(target.Name, phasesCopy, spinnerFrame, dur, true)
+		printedLines = strings.Count(output, "\n")
+		fmt.Print(output)
+	}
 	for {
 		select {
 		case event := <-events:
@@ -188,22 +196,18 @@ func wake1(target wake.Host) error {
 			}
 
 			if event.Phase == "complete" {
-				clearLines(1)
-				dur := time.Duration(event.ElapsedMs) * time.Millisecond
-				fmt.Print(render(target.Name, phasesCopy, spinnerFrame, dur, true))
+				rerender(time.Duration(event.ElapsedMs) * time.Millisecond)
 				if event.Status == "error" {
 					return fmt.Errorf("%s", event.Detail)
 				}
 				return nil
 			}
 
-			clearLines(1)
-			fmt.Print(render(target.Name, phasesCopy, spinnerFrame, time.Since(startTime), false))
+			rerender(time.Since(startTime))
 
 		case <-ticker.C:
 			spinnerFrame++
-			clearLines(1)
-			fmt.Print(render(target.Name, phasesCopy, spinnerFrame, time.Since(startTime), false))
+			rerender(time.Since(startTime))
 
 		case err := <-done:
 			return err
