@@ -58,27 +58,308 @@ var indexTmpl = template.Must(template.New("").Parse(`<!DOCTYPE html>
 <head>
   <title>webwake</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <style>
-  body {
-    font-size: 200%;
-  }
+:root {
+  --color-success: #22c55e;
+  --color-pending: #6b7280;
+  --color-active: #eab308;
+  --color-error: #ef4444;
+  --color-bg: #111827;
+  --color-surface: #1f2937;
+  --color-text: #f9fafb;
+  --color-text-dim: #9ca3af;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  margin: 0;
+  padding: 16px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0 0 20px 0;
+  font-weight: 500;
+}
+
+.machine-btn {
+  display: block;
+  width: 100%;
+  padding: 24px;
+  margin: 12px 0;
+  font-size: 1.5rem;
+  min-height: 80px;
+  border: none;
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: transform 0.1s, background 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.machine-btn:active {
+  transform: scale(0.98);
+  background: #374151;
+}
+
+#progress-view {
+  display: none;
+}
+
+#progress-view.active {
+  display: block;
+}
+
+#machine-list.hidden {
+  display: none;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+#back-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#back-btn:active {
+  background: var(--color-surface);
+}
+
+#target-name {
+  font-size: 1.5rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+.phase-row {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid #374151;
+  align-items: start;
+}
+
+.phase-row:last-child {
+  border-bottom: none;
+}
+
+.phase-symbol {
+  font-size: 1.25rem;
+  text-align: center;
+}
+
+.phase-content {
+  min-width: 0;
+}
+
+.phase-label {
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.phase-detail {
+  font-size: 0.9rem;
+  color: var(--color-text-dim);
+  word-break: break-word;
+}
+
+.phase-time {
+  font-size: 0.95rem;
+  color: var(--color-text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.status-pending .phase-symbol,
+.status-pending .phase-label { color: var(--color-pending); }
+.status-start .phase-symbol,
+.status-start .phase-label { color: var(--color-active); }
+.status-done .phase-symbol,
+.status-done .phase-label { color: var(--color-success); }
+.status-error .phase-symbol,
+.status-error .phase-label { color: var(--color-error); }
+.status-skipped .phase-symbol,
+.status-skipped .phase-label { color: var(--color-pending); }
+
+#total {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 2px solid #374151;
+  font-size: 1.1rem;
+  color: var(--color-text-dim);
+}
   </style>
 </head>
 <body>
 
-select machine to wake up:
+<div id="machine-list">
+  <h1>webwake</h1>
+  {{ range $machine := .Machines }}
+  <button class="machine-btn" data-machine="{{ $machine }}">{{ $machine }}</button>
+  {{ end }}
+</div>
 
-<form action="/wake" method="post">
+<div id="progress-view">
+  <div class="header">
+    <button id="back-btn">← Back</button>
+    <h2 id="target-name"></h2>
+  </div>
+  <div id="phases"></div>
+  <div id="total">Total: -</div>
+</div>
 
-<select name="machine" id="machine">
-{{ range $machine := .Machines }}
-<option value="{{ $machine }}" {{ if (eq $machine "storage2") }} selected="selected" {{ end }}>{{ $machine }}</option>
-{{ end }}
-</select><br>
+<script>
+const PHASES = [
+  { name: 'checking', label: 'Checking' },
+  { name: 'waking', label: 'Waking' },
+  { name: 'ssh', label: 'Waiting for SSH' },
+  { name: 'health', label: 'Health check' }
+];
 
-<input type="submit" value="wake">
+const SPINNER = ['◐', '◓', '◑', '◒'];
 
-</form>
+let eventSource = null;
+let spinnerInterval = null;
+let spinnerFrame = 0;
+let startTime = null;
+let phaseState = {};
+
+function formatDuration(ms) {
+  if (ms == null || ms === 0) return '-';
+  if (ms < 1000) return ms + 'ms';
+  return (ms / 1000).toFixed(1) + 's';
+}
+
+function getSymbol(status, frame) {
+  switch (status) {
+    case 'done': return '✓';
+    case 'start': return SPINNER[frame % SPINNER.length];
+    case 'error': return '✗';
+    case 'skipped': return '○';
+    default: return '○';
+  }
+}
+
+function renderPhases() {
+  const container = document.getElementById('phases');
+  container.innerHTML = PHASES.map(p => {
+    const state = phaseState[p.name] || { status: 'pending', detail: '', elapsed: null };
+    const symbol = getSymbol(state.status, spinnerFrame);
+    return ` + "`" + `
+      <div class="phase-row status-${state.status}">
+        <div class="phase-symbol">${symbol}</div>
+        <div class="phase-content">
+          <div class="phase-label">${p.label}</div>
+          <div class="phase-detail">${state.detail || ''}</div>
+        </div>
+        <div class="phase-time">${formatDuration(state.elapsed)}</div>
+      </div>
+    ` + "`" + `;
+  }).join('');
+}
+
+function updateTotal(done) {
+  const el = document.getElementById('total');
+  const elapsed = Date.now() - startTime;
+  el.textContent = 'Total: ' + formatDuration(elapsed) + (done ? '' : '...');
+}
+
+function resetState() {
+  phaseState = {};
+  spinnerFrame = 0;
+  startTime = Date.now();
+}
+
+function startWake(machine) {
+  resetState();
+
+  document.getElementById('machine-list').classList.add('hidden');
+  document.getElementById('progress-view').classList.add('active');
+  document.getElementById('target-name').textContent = machine;
+
+  renderPhases();
+  updateTotal(false);
+
+  spinnerInterval = setInterval(() => {
+    spinnerFrame++;
+    renderPhases();
+    updateTotal(false);
+  }, 100);
+
+  eventSource = new EventSource('/wake/stream?machine=' + encodeURIComponent(machine));
+
+  eventSource.onmessage = (e) => {
+    const event = JSON.parse(e.data);
+
+    if (event.phase !== 'complete') {
+      phaseState[event.phase] = {
+        status: event.status,
+        detail: event.detail || '',
+        elapsed: event.elapsed_ms || null
+      };
+    }
+
+    if (event.phase === 'complete') {
+      clearInterval(spinnerInterval);
+      spinnerInterval = null;
+      eventSource.close();
+      eventSource = null;
+      updateTotal(true);
+    }
+
+    renderPhases();
+  };
+
+  eventSource.onerror = () => {
+    clearInterval(spinnerInterval);
+    spinnerInterval = null;
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+  };
+}
+
+function goBack() {
+  if (spinnerInterval) {
+    clearInterval(spinnerInterval);
+    spinnerInterval = null;
+  }
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+  document.getElementById('progress-view').classList.remove('active');
+  document.getElementById('machine-list').classList.remove('hidden');
+}
+
+document.querySelectorAll('.machine-btn').forEach(btn => {
+  btn.addEventListener('click', () => startWake(btn.dataset.machine));
+});
+
+document.getElementById('back-btn').addEventListener('click', goBack);
+</script>
 
 </body>
 </html>`))
