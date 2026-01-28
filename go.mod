@@ -21,13 +21,17 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 )
 
+require github.com/spf13/cobra v1.10.2
+
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/google/renameio/v2 v2.0.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mdlayher/watchdog v0.0.0-20201005150459-8bdc4f41966b // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/stapelberg/rsyncparse v0.0.0-20240130202559-76f2a26bb33f // indirect
 	golang.org/x/text v0.31.0 // indirect
 )
