@@ -10,10 +10,11 @@ import (
 )
 
 var suspendCmd = &cobra.Command{
-	Use:   "suspend <hostname>",
-	Short: "Suspend a machine via SSH",
-	Long:  `Suspend a machine by connecting via SSH with the ~/.ssh/id_suspend key.`,
-	Args:  cobra.ExactArgs(1),
+	Use:          "suspend <hostname>",
+	Short:        "Suspend a machine via SSH",
+	Long:         `Suspend a machine by connecting via SSH with the ~/.ssh/id_suspend key.`,
+	Args:         cobra.ExactArgs(1),
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		host, err := lookupHost(args[0])
 		if err != nil {

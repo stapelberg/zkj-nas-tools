@@ -2,10 +2,13 @@ package wakecli
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"time"
@@ -15,10 +18,11 @@ import (
 )
 
 var upCmd = &cobra.Command{
-	Use:   "up <hostname>",
-	Short: "Wake up a machine",
-	Long:  `Wake up a machine using Wake-on-LAN or MQTT relay.`,
-	Args:  cobra.ExactArgs(1),
+	Use:          "up <hostname>",
+	Short:        "Wake up a machine",
+	Long:         `Wake up a machine using Wake-on-LAN or MQTT relay.`,
+	Args:         cobra.ExactArgs(1),
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		host, err := lookupHost(args[0])
 		if err != nil {
@@ -50,6 +54,15 @@ var phases = []Phase{
 	{Name: "waking", Label: "Waking"},
 	{Name: "ssh", Label: "Waiting for SSH"},
 	{Name: "health", Label: "Health check"},
+}
+
+// encryptedPhases are used for LUKS-encrypted hosts that need interactive unlock.
+var encryptedPhases = []Phase{
+	{Name: "checking", Label: "Checking"},
+	{Name: "waking", Label: "Waking"},
+	{Name: "initramfs", Label: "Initramfs SSH"},
+	{Name: "unlock", Label: "Unlocking"},
+	{Name: "system", Label: "System SSH"},
 }
 
 // Spinner frames for in-progress animation.
@@ -138,6 +151,13 @@ func clearLines(n int) {
 }
 
 func wakeUp(target wake.Host) error {
+	if target.Name == "verkaufg9" {
+		return wakeUpWithUnlock(target)
+	}
+	return wakeUpStream(target)
+}
+
+func wakeUpStream(target wake.Host) error {
 	wakeURL := "http://" + target.Relay + ":8911/wake/stream?machine=" + target.Name
 
 	resp, err := http.Get(wakeURL)
@@ -225,4 +245,197 @@ func wakeUp(target wake.Host) error {
 
 func printError(err error) {
 	fmt.Fprintf(os.Stderr, "\n%s\n", colored(ansiRed, "Error: "+err.Error()))
+}
+
+// pollSSHQuiet polls until SSH becomes reachable, without logging.
+func pollSSHQuiet(ctx context.Context, addr string) error {
+	tick := time.NewTicker(1 * time.Second)
+	defer tick.Stop()
+	for range tick.C {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := wake.PollSSH1(ctx, addr); err != nil {
+			continue
+		}
+		return nil
+	}
+	return nil
+}
+
+// wakeUpWithUnlock handles LUKS-encrypted hosts like verkaufg9 that need
+// interactive unlock after initramfs SSH becomes available.
+func wakeUpWithUnlock(target wake.Host) error {
+	phasesCopy := slices.Clone(encryptedPhases)
+	startTime := time.Now()
+	spinnerFrame := 0
+
+	output := render(target.Name, phasesCopy, spinnerFrame, 0, false)
+	printedLines := strings.Count(output, "\n")
+	fmt.Print(output)
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	updatePhase := func(name, status, detail string, elapsed time.Duration) {
+		for i := range phasesCopy {
+			if phasesCopy[i].Name == name {
+				phasesCopy[i].Status = status
+				phasesCopy[i].Detail = detail
+				if elapsed > 0 {
+					phasesCopy[i].Elapsed = elapsed
+				}
+				break
+			}
+		}
+	}
+
+	rerender := func(done bool) {
+		clearLines(printedLines)
+		output := render(target.Name, phasesCopy, spinnerFrame, time.Since(startTime), done)
+		printedLines = strings.Count(output, "\n")
+		fmt.Print(output)
+	}
+
+	// startTicker launches a goroutine for spinner animation and returns
+	// a channel to stop it. Call close() on the returned channel to stop.
+	startTicker := func() chan struct{} {
+		stop := make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					spinnerFrame++
+					rerender(false)
+				case <-stop:
+					return
+				}
+			}
+		}()
+		return stop
+	}
+	stopTicker := startTicker()
+
+	finishWithError := func(err error) error {
+		close(stopTicker)
+		rerender(true)
+		return err
+	}
+
+	finish := func() error {
+		close(stopTicker)
+		rerender(true)
+		return nil
+	}
+
+	baseURL := "http://" + target.Relay + ":8911"
+
+	// Phase 1: Check if already up (check Tailscale hostname for full system)
+	updatePhase("checking", "start", fmt.Sprintf("checking tcp/22 on %s", target.Name), 0)
+	rerender(false)
+	phaseStart := time.Now()
+
+	checkCtx, checkCanc := context.WithTimeout(context.Background(), 5*time.Second)
+	conn, err := (&net.Dialer{}).DialContext(checkCtx, "tcp", target.Name+":22")
+	checkCanc()
+
+	if err == nil {
+		conn.Close()
+		updatePhase("checking", "done", "already running", time.Since(phaseStart))
+		rerender(false)
+		return finish()
+	}
+	updatePhase("checking", "done", "host is down", time.Since(phaseStart))
+	rerender(false)
+
+	// Phase 2: Send WoL
+	updatePhase("waking", "start", "sending wake signal", 0)
+	rerender(false)
+	phaseStart = time.Now()
+
+	resp, err := http.Get(baseURL + "/wol?machine=" + target.Name)
+	if err != nil {
+		updatePhase("waking", "error", err.Error(), time.Since(phaseStart))
+		return finishWithError(err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("wol returned %s", resp.Status)
+		updatePhase("waking", "error", err.Error(), time.Since(phaseStart))
+		return finishWithError(err)
+	}
+	updatePhase("waking", "done", "sent magic packet", time.Since(phaseStart))
+	rerender(false)
+
+	// Phase 3: Wait for initramfs SSH (poll locally, not via relay)
+	updatePhase("initramfs", "start", "polling tcp/22", 0)
+	rerender(false)
+	phaseStart = time.Now()
+
+	sshCtx, sshCanc := context.WithTimeout(context.Background(), 5*time.Minute)
+	if err := pollSSHQuiet(sshCtx, target.IP+":22"); err != nil {
+		sshCanc()
+		updatePhase("initramfs", "error", err.Error(), time.Since(phaseStart))
+		return finishWithError(err)
+	}
+	sshCanc()
+	updatePhase("initramfs", "done", "initramfs ready", time.Since(phaseStart))
+	rerender(false)
+
+	// Phase 4: Interactive unlock
+	// Clear the progress UI for interactive SSH
+	updatePhase("unlock", "start", "running cryptroot-unlock", 0)
+	rerender(false)
+	phaseStart = time.Now()
+
+	// Stop ticker to prevent overwriting the interactive SSH prompt
+	close(stopTicker)
+
+	// Clear progress display for interactive session
+	clearLines(printedLines)
+	fmt.Printf("%s Unlocking %s - enter LUKS passphrase:\n\n",
+		colored(ansiYellow, "▶"),
+		colored(ansiBold, target.Name))
+
+	cmd := exec.Command("ssh", "-t", "root@"+target.IP, "cryptroot-unlock")
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		// Re-render progress after interactive session
+		fmt.Println()
+		printedLines = 0
+		updatePhase("unlock", "error", err.Error(), time.Since(phaseStart))
+		rerender(false)
+		// Restart ticker so finishWithError can close it
+		stopTicker = startTicker()
+		return finishWithError(fmt.Errorf("cryptroot-unlock failed: %w", err))
+	}
+
+	// Re-render progress after interactive session
+	fmt.Println()
+	printedLines = 0
+	updatePhase("unlock", "done", "disk unlocked", time.Since(phaseStart))
+	rerender(false)
+
+	// Restart ticker for remaining phases
+	stopTicker = startTicker()
+
+	// Phase 5: Wait for full system SSH on Tailscale hostname
+	updatePhase("system", "start", fmt.Sprintf("polling %s:22", target.Name), 0)
+	rerender(false)
+	phaseStart = time.Now()
+
+	sshCtx, sshCanc = context.WithTimeout(context.Background(), 5*time.Minute)
+	if err := pollSSHQuiet(sshCtx, target.Name+":22"); err != nil {
+		sshCanc()
+		updatePhase("system", "error", err.Error(), time.Since(phaseStart))
+		return finishWithError(err)
+	}
+	sshCanc()
+	updatePhase("system", "done", "system ready", time.Since(phaseStart))
+
+	return finish()
 }

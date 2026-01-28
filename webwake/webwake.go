@@ -459,6 +459,107 @@ func (s *server) wake(w http.ResponseWriter, r *http.Request) error {
 	return err
 }
 
+// wol sends a Wake-on-LAN packet (or MQTT for storage2) and returns immediately.
+// This is an atomic building block for CLI orchestration.
+func (s *server) wol(w http.ResponseWriter, r *http.Request) error {
+	host := r.FormValue("machine")
+	if host == "" {
+		return httpError(http.StatusBadRequest, fmt.Errorf("no machine parameter"))
+	}
+
+	log.Printf("wol(%s)", host)
+
+	target, ok := wake.Hosts[host]
+	if !ok {
+		return httpError(http.StatusNotFound, fmt.Errorf("host not found"))
+	}
+
+	if target.Relay != hostname {
+		return httpError(http.StatusBadRequest, fmt.Errorf("machine %s is served by relay %s, not %s", host, target.Relay, hostname))
+	}
+
+	cfg := wake.Config{
+		MQTTBroker: s.mqttBroker,
+		ClientID:   "github.com/stapelberg/zkj-nas-tools/webwake",
+		Target:     target,
+	}
+
+	if err := cfg.SendWakeSignal(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		return json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": err.Error()})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// pollSSH streams SSE events while polling SSH port, completing when SSH responds.
+// This is an atomic building block for CLI orchestration.
+func (s *server) pollSSH(w http.ResponseWriter, r *http.Request) error {
+	host := r.FormValue("machine")
+	if host == "" {
+		return httpError(http.StatusBadRequest, fmt.Errorf("no machine parameter"))
+	}
+
+	log.Printf("pollSSH(%s)", host)
+
+	target, ok := wake.Hosts[host]
+	if !ok {
+		return httpError(http.StatusNotFound, fmt.Errorf("host not found"))
+	}
+
+	// Set up SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return httpError(http.StatusInternalServerError, fmt.Errorf("streaming not supported"))
+	}
+
+	startTime := time.Now()
+
+	sendEvent := func(event progressEvent) {
+		event.ElapsedMs = time.Since(startTime).Milliseconds()
+		data, err := json.Marshal(event)
+		if err != nil {
+			log.Printf("failed to marshal event: %v", err)
+			return
+		}
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+	}
+
+	sendEvent(progressEvent{
+		Phase:  "ssh",
+		Status: "start",
+		Detail: fmt.Sprintf("polling tcp/22 on %s", target.Name),
+	})
+
+	sshCtx, canc := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer canc()
+
+	if err := wake.PollSSH(sshCtx, target.IP+":22"); err != nil {
+		sendEvent(progressEvent{
+			Phase:  "ssh",
+			Status: "error",
+			Detail: err.Error(),
+		})
+		return nil
+	}
+
+	sendEvent(progressEvent{
+		Phase:  "ssh",
+		Status: "done",
+		Detail: "ssh responding",
+	})
+
+	return nil
+}
+
 // progressEvent is a Server-Sent Event to report wake progress.
 type progressEvent struct {
 	Phase     string `json:"phase"`
@@ -578,6 +679,8 @@ func webwake() error {
 	mux.Handle("/", handleError(srv.index))
 	mux.Handle("/wake", handleError(srv.wake))
 	mux.Handle("/wake/stream", handleError(srv.wakeStream))
+	mux.Handle("/wol", handleError(srv.wol))
+	mux.Handle("/poll/ssh", handleError(srv.pollSSH))
 
 	eg, ctx := errgroup.WithContext(context.Background())
 	for _, addr := range strings.Split(*listenAddr, ",") {

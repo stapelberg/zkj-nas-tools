@@ -164,6 +164,37 @@ func (c *Config) isStorage() bool {
 
 var ErrAlreadyRunning = errors.New("already running")
 
+// SendWakeSignal sends the wake signal (WoL or MQTT) without any polling.
+// This is an atomic building block for CLI orchestration.
+func (c *Config) SendWakeSignal() error {
+	if c.Target.Name == "storage2" || c.Target.IP == "10.0.0.252" {
+		log.Printf("pushing storage2 mainboard power button")
+		return PushMainboardPower(c.MQTTBroker, c.ClientID)
+	}
+
+	log.Printf("Sending magic packet to %v", c.Target.MAC)
+	ips, err := ifaddr.PrivateInterfaceAddrs()
+	if err != nil {
+		return err
+	}
+	var laddr *net.UDPAddr
+	_, lan, err := net.ParseCIDR("10.0.0.0/8")
+	if err != nil {
+		return err
+	}
+	for _, ipstr := range ips {
+		if ip := net.ParseIP(ipstr); lan.Contains(ip) {
+			laddr = &net.UDPAddr{IP: ip}
+			break
+		}
+	}
+	if err := wakeonlan.SendMagicPacket(laddr, c.Target.MAC); err != nil {
+		return fmt.Errorf("sendWOL: %w", err)
+	}
+	log.Printf("Sent magic packet to %v", c.Target.MAC)
+	return nil
+}
+
 // ProgressFunc is called to report progress during wakeup.
 // phase is one of: "checking", "waking", "ssh", "health", "complete"
 // status is one of: "start", "done", "skipped", "error", "already_running"
@@ -214,42 +245,18 @@ func (c *Config) WakeupWithProgress(ctx context.Context, progressFn ProgressFunc
 
 	// Phase: waking
 	progressFn("waking", "start", "sending wake signal")
-	if c.Target.Name == "storage2" || c.Target.IP == "10.0.0.252" {
-		// push the mainboard power button to turn off the PC part (ESP32 will
-		// keep running on USB +5V standby power).
-		log.Printf("pushing storage2 mainboard power button")
-		if err := PushMainboardPower(c.MQTTBroker, c.ClientID); err != nil {
-			log.Printf("pushing storage2 mainboard power button failed: %v", err)
-			progressFn("waking", "error", err.Error())
-		} else {
-			progressFn("waking", "done", "pushed mainboard power button")
+	if err := c.SendWakeSignal(); err != nil {
+		progressFn("waking", "error", err.Error())
+		// Note: storage2 continues even on error (existing behavior)
+		if c.Target.Name != "storage2" && c.Target.IP != "10.0.0.252" {
+			return err
 		}
 	} else {
-		log.Printf("Sending magic packet to %v", c.Target.MAC)
-		ips, err := ifaddr.PrivateInterfaceAddrs()
-		if err != nil {
-			progressFn("waking", "error", err.Error())
-			return err
+		detail := "sent magic packet"
+		if c.Target.Name == "storage2" || c.Target.IP == "10.0.0.252" {
+			detail = "pushed mainboard power button"
 		}
-		var laddr *net.UDPAddr
-		_, lan, err := net.ParseCIDR("10.0.0.0/8")
-		if err != nil {
-			progressFn("waking", "error", err.Error())
-			return err
-		}
-		for _, ipstr := range ips {
-			if ip := net.ParseIP(ipstr); lan.Contains(ip) {
-				laddr = &net.UDPAddr{IP: ip}
-				break
-			}
-		}
-		if err := wakeonlan.SendMagicPacket(laddr, c.Target.MAC); err != nil {
-			log.Printf("sendWOL: %v", err)
-			progressFn("waking", "error", err.Error())
-		} else {
-			log.Printf("Sent magic packet to %v", c.Target.MAC)
-			progressFn("waking", "done", fmt.Sprintf("sent magic packet to %s", c.Target.MAC))
-		}
+		progressFn("waking", "done", detail)
 	}
 
 	// Phase: ssh
