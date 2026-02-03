@@ -126,6 +126,12 @@ var Hosts = map[string]Host{
 		MAC:   "bc:fc:e7:68:12:0e",
 		Relay: "router7",
 	},
+	"mixna": {
+		Name:  "mixna",
+		IP:    "10.0.0.47", // static lease
+		MAC:   "04:42:1a:31:9e:97",
+		Relay: "router7",
+	},
 	"storage2": {
 		Name: "storage2",
 		IP:   "10.0.0.252",
