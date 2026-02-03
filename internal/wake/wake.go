@@ -113,10 +113,11 @@ func PushMainboardPower(mqttBroker, clientID string) error {
 }
 
 type Host struct {
-	Name  string
-	IP    string
-	MAC   string
-	Relay string // webwake instance
+	Name          string
+	IP            string
+	MAC           string
+	Relay         string // webwake instance
+	UnlockCommand string
 }
 
 var Hosts = map[string]Host{
@@ -127,10 +128,11 @@ var Hosts = map[string]Host{
 		Relay: "router7",
 	},
 	"mixna": {
-		Name:  "mixna",
-		IP:    "10.0.0.47", // static lease
-		MAC:   "04:42:1a:31:9e:97",
-		Relay: "router7",
+		Name:          "mixna",
+		IP:            "10.0.0.47", // static lease
+		MAC:           "04:42:1a:31:9e:97",
+		Relay:         "router7",
+		UnlockCommand: "systemctl default",
 	},
 	"storage2": {
 		Name: "storage2",
@@ -145,10 +147,11 @@ var Hosts = map[string]Host{
 		Relay: "router7",
 	},
 	"verkaufg9": {
-		Name:  "verkaufg9",
-		IP:    "10.11.0.2",
-		MAC:   "7c:4d:8f:00:67:0a",
-		Relay: "blr",
+		Name:          "verkaufg9",
+		IP:            "10.11.0.2",
+		MAC:           "7c:4d:8f:00:67:0a",
+		Relay:         "blr",
+		UnlockCommand: "cryptroot-unlock",
 	},
 }
 

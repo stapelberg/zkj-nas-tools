@@ -398,7 +398,7 @@ func wakeUpWithUnlock(target wake.Host) error {
 		colored(ansiYellow, "▶"),
 		colored(ansiBold, target.Name))
 
-	cmd := exec.Command("ssh", "-t", "root@"+target.IP, "cryptroot-unlock")
+	cmd := exec.Command("ssh", "-t", "root@"+target.IP, target.UnlockCommand)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

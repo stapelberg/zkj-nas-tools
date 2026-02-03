@@ -20,9 +20,12 @@ var unlockCmd = &cobra.Command{
 			return err
 		}
 
-		sshCmd := exec.CommandContext(cmd.Context(), "ssh",
+		sshCmd := exec.CommandContext(
+			cmd.Context(),
+			"ssh",
+			"-t",
 			fmt.Sprintf("root@%s", host.IP),
-		)
+			host.UnlockCommand)
 		sshCmd.Stdin = os.Stdin
 		sshCmd.Stdout = os.Stdout
 		sshCmd.Stderr = os.Stderr
