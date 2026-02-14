@@ -21,6 +21,7 @@ func init() {
 	rootCmd.AddCommand(upCmd)
 	rootCmd.AddCommand(suspendCmd)
 	rootCmd.AddCommand(unlockCmd)
+	rootCmd.AddCommand(resetCmd)
 }
 
 func Execute(ctx context.Context) error {

@@ -2,6 +2,7 @@ package wake
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -118,6 +119,7 @@ type Host struct {
 	MAC           string
 	Relay         string // webwake instance
 	UnlockCommand string
+	SmartPlug     string // ESPHome smart plug hostname for power control
 }
 
 var Hosts = map[string]Host{
@@ -141,10 +143,11 @@ var Hosts = map[string]Host{
 		Relay: "router7",
 	},
 	"storage3": {
-		Name:  "storage3",
-		IP:    "10.0.0.253",
-		MAC:   "70:85:c2:8d:b9:76",
-		Relay: "router7",
+		Name:      "storage3",
+		IP:        "10.0.0.253",
+		MAC:       "70:85:c2:8d:b9:76",
+		Relay:     "router7",
+		SmartPlug: "plug-storage3.lan",
 	},
 	"verkaufg9": {
 		Name:          "verkaufg9",
@@ -298,4 +301,73 @@ func (c *Config) WakeupWithProgress(ctx context.Context, progressFn ProgressFunc
 
 	progressFn("complete", "done", "")
 	return nil
+}
+
+// readSmartPlugPower reads the current power consumption in watts from an
+// ESPHome smart plug's REST API.
+func readSmartPlugPower(ctx context.Context, plugHost string) (float64, error) {
+	url := "http://" + plugHost + "/sensor/power"
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return 0, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("smart plug %s returned HTTP %d", plugHost, resp.StatusCode)
+	}
+	var result struct {
+		Value float64 `json:"value"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0, fmt.Errorf("decoding smart plug response: %w", err)
+	}
+	return result.Value, nil
+}
+
+// SetSmartPlugRelay controls the relay on an ESPHome smart plug.
+// action must be "turn_on" or "turn_off".
+func SetSmartPlugRelay(ctx context.Context, plugHost, action string) error {
+	url := "http://" + plugHost + "/switch/switch/" + action
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("smart plug %s returned HTTP %d for %s", plugHost, resp.StatusCode, action)
+	}
+	return nil
+}
+
+// PollSmartPlugPowerOff polls the smart plug power sensor every 2s until the
+// reading drops below thresholdWatts, indicating the machine is off.
+func PollSmartPlugPowerOff(ctx context.Context, plugHost string, thresholdWatts float64) error {
+	tick := time.NewTicker(2 * time.Second)
+	defer tick.Stop()
+	log.Printf("[%s] polling power sensor until below %.0fW", plugHost, thresholdWatts)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+			watts, err := readSmartPlugPower(ctx, plugHost)
+			if err != nil {
+				log.Printf("[%s] reading power: %v", plugHost, err)
+				continue
+			}
+			log.Printf("[%s] power: %.1fW", plugHost, watts)
+			if watts < thresholdWatts {
+				log.Printf("[%s] power below %.0fW, machine is off", plugHost, thresholdWatts)
+				return nil
+			}
+		}
+	}
 }
