@@ -9,5 +9,5 @@ pkgs.buildGoModule {
 
   src = ./..;
 
-  vendorHash = "sha256-xnkotgRH82UtTzkI8SO6g36zZ/KbgteAfQI51wUrF2g=";
+  vendorHash = "sha256-NIL428MGhHNwJJSBXj8fIvjQb/x4A6YG50N9pIMDUjY=";
 }
