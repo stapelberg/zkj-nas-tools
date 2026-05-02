@@ -662,7 +662,7 @@ func webwake() error {
 			"(comma-separated list of) [host]:port HTTP listen address(es)")
 
 		mqttBroker = flag.String("mqtt_broker",
-			"tcp://dr.lan:1883",
+			"tcp://mqtt.lan:1883",
 			"MQTT broker address for github.com/eclipse/paho.mqtt.golang")
 	)
 

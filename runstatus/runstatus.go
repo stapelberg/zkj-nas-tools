@@ -129,7 +129,7 @@ func pollProc() error {
 func main() {
 	flag.Parse()
 
-	opts := mqtt.NewClientOptions().AddBroker("tcp://dr.lan:1883")
+	opts := mqtt.NewClientOptions().AddBroker("tcp://mqtt.lan:1883")
 	opts = opts.SetClientID("runstatus-" + host)
 	opts = opts.SetOnConnectHandler(func(mqtt.Client) {
 		runMu.RLock()

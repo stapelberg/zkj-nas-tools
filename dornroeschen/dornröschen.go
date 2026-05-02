@@ -40,7 +40,7 @@ var (
 		"Path to the SSH private key file to authenticate with at -storage_hosts for syncing")
 
 	mqttBroker = flag.String("mqtt_broker",
-		"tcp://dr.lan:1883",
+		"tcp://mqtt.lan:1883",
 		"MQTT broker address for github.com/eclipse/paho.mqtt.golang")
 )
 
