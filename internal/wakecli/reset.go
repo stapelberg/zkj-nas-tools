@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stapelberg/zkj-nas-tools/internal/wake"
@@ -41,22 +40,10 @@ var resetCmd = &cobra.Command{
 			return nil
 		}
 
-		log.Printf("cutting power to %s via smart plug %s", host.Name, host.SmartPlug)
-		if err := wake.SetSmartPlugRelay(cmd.Context(), host.SmartPlug, "turn_off"); err != nil {
-			return fmt.Errorf("turning off relay: %w", err)
+		log.Printf("power-cycling %s via smart plug %s", host.Name, host.SmartPlug)
+		if err := wake.PowerCycleSmartPlug(cmd.Context(), host.SmartPlug); err != nil {
+			return err
 		}
-
-		pollCtx, cancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
-		defer cancel()
-		if err := wake.PollSmartPlugPowerOff(pollCtx, host.SmartPlug, 5); err != nil {
-			return fmt.Errorf("waiting for power off: %w", err)
-		}
-
-		log.Printf("restoring power to %s via smart plug %s", host.Name, host.SmartPlug)
-		if err := wake.SetSmartPlugRelay(cmd.Context(), host.SmartPlug, "turn_on"); err != nil {
-			return fmt.Errorf("turning on relay: %w", err)
-		}
-
 		log.Printf("reset of %s complete", host.Name)
 		return nil
 	},

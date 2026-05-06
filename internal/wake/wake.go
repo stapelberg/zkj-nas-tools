@@ -9,11 +9,9 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gokrazy/gokrazy/ifaddr"
 	"github.com/stapelberg/zkj-nas-tools/internal/wakeonlan"
 )
@@ -87,32 +85,6 @@ func PollHTTPHealthz(ctx context.Context, addr string) error {
 	}
 }
 
-func PushMainboardPower(mqttBroker, clientID string) error {
-	opts := mqtt.NewClientOptions().AddBroker(mqttBroker)
-	if hostname, err := os.Hostname(); err == nil {
-		clientID += "@" + hostname
-	}
-	opts.SetClientID(clientID)
-	opts.SetConnectRetry(true)
-	mqttClient := mqtt.NewClient(opts)
-	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		return fmt.Errorf("MQTT connection failed: %v", token.Error())
-	}
-	defer mqttClient.Disconnect(1000 /* wait 1s for existing work to be completed */)
-
-	const topic = "resetesp/switch/powerbtn/command"
-	token := mqttClient.Publish(
-		topic,
-		0,     /* qos */
-		false, /* retained */
-		string("on"))
-	if !token.WaitTimeout(30 * time.Second) {
-		return fmt.Errorf("could not publish MQTT message within 30s: %v", token.Error())
-	}
-
-	return nil
-}
-
 type Host struct {
 	Name          string
 	IP            string
@@ -139,8 +111,9 @@ var Hosts = map[string]Host{
 	"storage2": {
 		Name: "storage2",
 		IP:   "10.0.0.252",
-		// No MAC, woken up via MQTT
-		Relay: "router7",
+		// No MAC, woken up via smart plug (BIOS: restore on AC power).
+		Relay:     "router7",
+		SmartPlug: "smartplug-5759d6.lan",
 	},
 	"storage3": {
 		Name:      "storage3",
@@ -159,9 +132,6 @@ var Hosts = map[string]Host{
 }
 
 type Config struct {
-	MQTTBroker string
-	ClientID   string
-
 	Target Host
 }
 
@@ -176,12 +146,12 @@ func (c *Config) isStorage() bool {
 
 var ErrAlreadyRunning = errors.New("already running")
 
-// SendWakeSignal sends the wake signal (WoL or MQTT) without any polling.
+// SendWakeSignal sends the wake signal (smart plug or WoL) without any polling.
 // This is an atomic building block for CLI orchestration.
-func (c *Config) SendWakeSignal() error {
-	if c.Target.Name == "storage2" || c.Target.IP == "10.0.0.252" {
-		log.Printf("pushing storage2 mainboard power button")
-		return PushMainboardPower(c.MQTTBroker, c.ClientID)
+func (c *Config) SendWakeSignal(ctx context.Context) error {
+	if c.Target.SmartPlug != "" {
+		log.Printf("power-cycling smart plug %s for %s", c.Target.SmartPlug, c.Target.Name)
+		return PowerCycleSmartPlug(ctx, c.Target.SmartPlug)
 	}
 
 	log.Printf("Sending magic packet to %v", c.Target.MAC)
@@ -257,19 +227,15 @@ func (c *Config) WakeupWithProgress(ctx context.Context, progressFn ProgressFunc
 
 	// Phase: waking
 	progressFn("waking", "start", "sending wake signal")
-	if err := c.SendWakeSignal(); err != nil {
+	if err := c.SendWakeSignal(ctx); err != nil {
 		progressFn("waking", "error", err.Error())
-		// Note: storage2 continues even on error (existing behavior)
-		if c.Target.Name != "storage2" && c.Target.IP != "10.0.0.252" {
-			return err
-		}
-	} else {
-		detail := "sent magic packet"
-		if c.Target.Name == "storage2" || c.Target.IP == "10.0.0.252" {
-			detail = "pushed mainboard power button"
-		}
-		progressFn("waking", "done", detail)
+		return err
 	}
+	detail := "sent magic packet"
+	if c.Target.SmartPlug != "" {
+		detail = "power-cycled smart plug"
+	}
+	progressFn("waking", "done", detail)
 
 	// Phase: ssh
 	progressFn("ssh", "start", "polling tcp/22")
@@ -343,6 +309,43 @@ func SetSmartPlugRelay(ctx context.Context, plugHost, action string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("smart plug %s returned HTTP %d for %s", plugHost, resp.StatusCode, action)
+	}
+	return nil
+}
+
+// smartPlugMinOff is how long the relay stays off during a power cycle, on top
+// of waiting for the load sensor to drop. ATX PSU hold-up capacitors keep the
+// rails alive for a few seconds; the mainboard only sees a clean AC loss (and
+// re-fires "restore on AC power") if power stays gone long enough to drain
+// them.
+const smartPlugMinOff = 30 * time.Second
+
+// PowerCycleSmartPlug cuts smart plug relay power, waits for the load to fall
+// below 5W AND for smartPlugMinOff to elapse (so PSU capacitors drain and BIOS
+// sees a fresh AC cycle), then restores power. Used both for waking (BIOS
+// configured to "restore on AC") and for resetting a hung machine.
+func PowerCycleSmartPlug(ctx context.Context, plugHost string) error {
+	log.Printf("[%s] cutting smart plug relay power", plugHost)
+	offStart := time.Now()
+	if err := SetSmartPlugRelay(ctx, plugHost, "turn_off"); err != nil {
+		return fmt.Errorf("turning off relay: %w", err)
+	}
+	pollCtx, canc := context.WithTimeout(ctx, 5*time.Minute)
+	defer canc()
+	if err := PollSmartPlugPowerOff(pollCtx, plugHost, 5); err != nil {
+		return fmt.Errorf("waiting for power off: %w", err)
+	}
+	if remaining := smartPlugMinOff - time.Since(offStart); remaining > 0 {
+		log.Printf("[%s] holding off for %v to ensure clean AC loss", plugHost, remaining.Round(time.Millisecond))
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(remaining):
+		}
+	}
+	log.Printf("[%s] restoring smart plug relay power", plugHost)
+	if err := SetSmartPlugRelay(ctx, plugHost, "turn_on"); err != nil {
+		return fmt.Errorf("turning on relay: %w", err)
 	}
 	return nil
 }

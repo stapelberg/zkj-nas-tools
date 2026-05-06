@@ -384,9 +384,7 @@ var wokenTmpl = template.Must(template.New("").Parse(`<!DOCTYPE html>
 </body>
 </html>`))
 
-type server struct {
-	mqttBroker string
-}
+type server struct{}
 
 var hostname = func() string {
 	host, err := os.Hostname()
@@ -435,9 +433,7 @@ func (s *server) wake(w http.ResponseWriter, r *http.Request) error {
 		return httpError(http.StatusNotFound, fmt.Errorf("host not found"))
 	}
 	cfg := wake.Config{
-		MQTTBroker: s.mqttBroker,
-		ClientID:   "github.com/stapelberg/zkj-nas-tools/webwake",
-		Target:     target,
+		Target: target,
 	}
 	message := "waking up…"
 	err := cfg.Wakeup(context.Background())
@@ -479,12 +475,10 @@ func (s *server) wol(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	cfg := wake.Config{
-		MQTTBroker: s.mqttBroker,
-		ClientID:   "github.com/stapelberg/zkj-nas-tools/webwake",
-		Target:     target,
+		Target: target,
 	}
 
-	if err := cfg.SendWakeSignal(); err != nil {
+	if err := cfg.SendWakeSignal(r.Context()); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		return json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": err.Error()})
@@ -593,9 +587,7 @@ func (s *server) wakeStream(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	cfg := wake.Config{
-		MQTTBroker: s.mqttBroker,
-		ClientID:   "github.com/stapelberg/zkj-nas-tools/webwake",
-		Target:     target,
+		Target: target,
 	}
 
 	startTime := time.Now()
@@ -660,10 +652,6 @@ func webwake() error {
 		listenAddr = flag.String("listen",
 			"localhost:8911,consrv.lan:8911",
 			"(comma-separated list of) [host]:port HTTP listen address(es)")
-
-		mqttBroker = flag.String("mqtt_broker",
-			"tcp://mqtt.lan:1883",
-			"MQTT broker address for github.com/eclipse/paho.mqtt.golang")
 	)
 
 	flag.Parse()
@@ -671,9 +659,7 @@ func webwake() error {
 	// WaitForClock also (indirectly) ensures the network is up.
 	gokrazy.WaitForClock()
 
-	srv := &server{
-		mqttBroker: *mqttBroker,
-	}
+	srv := &server{}
 
 	mux := http.NewServeMux()
 	mux.Handle("/", handleError(srv.index))

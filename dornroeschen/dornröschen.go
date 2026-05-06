@@ -53,15 +53,21 @@ func splitHostMAC(hostmac string) (host, mac string) {
 }
 
 func wakeUp(host, mac string) (woken bool, _ error) {
-	cfg := wake.Config{
-		MQTTBroker: *mqttBroker,
-		ClientID:   "https://github.com/stapelberg/zkj-nas-tools/dornroeschen",
-		Target: wake.Host{
-			Name: host,
-			IP:   host,
-			MAC:  mac,
-		},
+	target := wake.Host{
+		Name: host,
+		IP:   host,
+		MAC:  mac,
 	}
+	// Pick up extra fields (notably SmartPlug) from the canonical host
+	// table when we recognize the IP.
+	for _, h := range wake.Hosts {
+		if h.IP == host {
+			target.Name = h.Name
+			target.SmartPlug = h.SmartPlug
+			break
+		}
+	}
+	cfg := wake.Config{Target: target}
 	err := cfg.Wakeup(context.Background())
 	if err == wake.ErrAlreadyRunning {
 		return false, nil // already up and running
