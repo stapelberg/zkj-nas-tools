@@ -108,7 +108,7 @@ func sshCommandFor(logger *log.Logger, session *ssh.Session, host, keypath, comm
 		}
 }
 
-func rsyncSSH(host, keypath, command string) (string, error) {
+func rsyncSSH(sourceHost, destHost, keypath, command string) (string, error) {
 	logFile, err := os.CreateTemp("", "dornröschen-ssh-*.log")
 	if err != nil {
 		return "", err
@@ -122,12 +122,12 @@ func rsyncSSH(host, keypath, command string) (string, error) {
 			session.Close()
 		}
 	}()
-	start, wait := sshCommandFor(logger, session, host, keypath, command)
+	start, wait := sshCommandFor(logger, session, sourceHost, keypath, command)
 
 	ctx := context.Background()
 	params := rsyncprom.WrapParams{
 		Pushgateway: "https://pushgateway.monkey-turtle.ts.net",
-		Instance:    "dr@" + host,
+		Instance:    "dr@" + sourceHost + ":" + destHost,
 		Job:         "rsync",
 	}
 	return logFile.Name(), rsyncprom.WrapRsync(ctx, &params, nil, start, wait)

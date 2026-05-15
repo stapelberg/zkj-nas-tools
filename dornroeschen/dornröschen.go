@@ -135,7 +135,7 @@ func backup1(destHost, sourceHost, sourceMAC string) error {
 	// The command is just destHost, because for the SSH key this program
 	// is using, the remote host will only ever run /root/backup.pl, which
 	// interprets the command as the destination host.
-	outputfile, err := rsyncSSH(sourceHost, *backupPrivateKeyPath, destHost)
+	outputfile, err := rsyncSSH(sourceHost, destHost, *backupPrivateKeyPath, destHost)
 	// Dump the output into the log, which is persisted via remote syslog:
 	if b, err := os.ReadFile(outputfile); err == nil {
 		log.Println("SSH output")
@@ -216,7 +216,7 @@ func sync(NASen []string) error {
 		destHost, _ := splitHostMAC(dest)
 		log.Printf("Syncing %s to %s", sourceHost, destHost)
 
-		outputfile, err := rsyncSSH(sourceHost, *syncPrivateKeyPath, destHost)
+		outputfile, err := rsyncSSH(sourceHost, destHost, *syncPrivateKeyPath, destHost)
 		if err != nil {
 			log.Printf("Syncing of %s to %s failed: %v", sourceHost, destHost, err)
 		}
