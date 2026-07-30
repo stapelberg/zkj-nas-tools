@@ -83,8 +83,12 @@ let
     if (my ($destination) = ($ENV{SSH_ORIGINAL_COMMAND} =~ /^([a-z0-9.]+)$/)) {
         $destination =~ s/\./:/g;
         $destination = "[2a02:168:4a00:0:''${destination}]";
-        # Figure out the last backup time:
-        my $lines = `${pkgs.rsync}/bin/rsync --list-only -e ssh ''${destination}:/`;
+        # Figure out the last backup time. Use ":." (not ":/"): rrsync chdirs
+        # into the restricted dir, so both list the same thing, but rsync
+        # 3.4.4's rrsync lstrip('/')s a bare "/" into "" and then fails its
+        # own realpath safety check ("unsafe arg"), which would silently
+        # disable --link-dest and the ran-today check.
+        my $lines = `${pkgs.rsync}/bin/rsync --list-only -e ssh ''${destination}:.`;
         my @dates = sort
                     grep { defined }
                     map { / ([0-9-]+)$/ && $1 || undef }
