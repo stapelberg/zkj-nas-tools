@@ -64,7 +64,7 @@ func getSessionHostnames() []string {
 		if len(parts) < 4 {
 			continue
 		}
-		hostnames = append(hostnames, parts[4])
+		hostnames = append(hostnames, parts[3])
 	}
 
 	return hostnames
