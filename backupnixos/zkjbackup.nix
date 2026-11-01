@@ -164,6 +164,10 @@ in
     postgresDumpWrapper
   ];
 
+  config.systemd.tmpfiles.rules = lib.mkIf (config.services.zkjbackup.postgresqlDatabases != [ ]) [
+    "d /var/pgdump 0750 postgres postgres -"
+  ];
+
   config.users.users.root.openssh.authorizedKeys.keys = lib.mkAfter [
     ''command="${backuppl}/bin/backuppl",no-port-forwarding,no-X11-forwarding ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICh4nMgU3AneqUonvplI/Nx1LrSCG5C6eM4LKKZW+Yxn michael@dr.zekjur.net''
   ];
