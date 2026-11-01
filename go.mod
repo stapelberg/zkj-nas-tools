@@ -1,6 +1,6 @@
 module github.com/stapelberg/zkj-nas-tools
 
-go 1.24.0
+go 1.26
 
 require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
@@ -9,10 +9,12 @@ require (
 	github.com/gokrazy/gokrazy v0.0.0-20221113114523-dd415c9ee654
 	github.com/gokrazy/internal v0.0.0-20220129150711-9ed298107648 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/google/renameio/v2 v2.0.0
 	github.com/mdlayher/netlink v1.1.0 // indirect
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.38.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
+	github.com/spf13/cobra v1.10.2
 	github.com/stapelberg/rsyncprom v0.0.0-20240519080021-6451b1ad259f
 	golang.org/x/crypto v0.45.0
 	golang.org/x/net v0.47.0
@@ -21,11 +23,8 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 )
 
-require github.com/spf13/cobra v1.10.2
-
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/google/renameio/v2 v2.0.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect

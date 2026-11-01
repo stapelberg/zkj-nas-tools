@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/renameio/v2"
 	"github.com/stapelberg/zkj-nas-tools/internal/wake"
 	"golang.org/x/sync/errgroup"
 )
@@ -292,6 +293,20 @@ func reachableViaSSH(host string) bool {
 	return wake.PollSSH1(ctx, host+":22") == nil
 }
 
+func lastOpportunisticDestPath(host string) string {
+	return "/perm/dr-opportunistic-" + host + ".txt"
+}
+
+func alternatingOpportunisticDest(storageList []string, host string) string {
+	lastDest, _ := os.ReadFile(lastOpportunisticDestPath(host))
+	for _, dest := range storageList {
+		if dest != strings.TrimSpace(string(lastDest)) {
+			return dest
+		}
+	}
+	return storageList[0]
+}
+
 func runOpportunisticBackups1(host string) {
 	var startBackup time.Time
 	prevReachable := false
@@ -314,14 +329,15 @@ func runOpportunisticBackups1(host string) {
 				continue
 			}
 
-			// Alternate between the available NASen to make sure each one works.
-			dest := storageList[(time.Now().Day()+1)%len(storageList)]
+			dest := alternatingOpportunisticDest(storageList, host)
 
 			log.Printf("[%s] starting backup to dest=%s", host, dest)
 
 			wokenNAS, err := backup(dest, []string{host + "/"})
 			if err != nil {
 				log.Printf("backup: %v", err)
+			} else if err := renameio.WriteFile(lastOpportunisticDestPath(host), []byte(dest), 0600); err != nil {
+				log.Printf("[%s] could not record backup destination: %v", host, err)
 			}
 
 			if wokenNAS {
